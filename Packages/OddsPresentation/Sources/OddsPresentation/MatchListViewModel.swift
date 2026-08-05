@@ -35,12 +35,19 @@ public final class MatchListViewModel: ObservableObject {
     @Published public private(set) var connectionState: OddsConnectionState = .idle
     @Published public private(set) var stats = StreamStats()
 
+    /// 目前畫面上的資料來自快取，尚未被 API 結果取代。
+    @Published public private(set) var isShowingCachedData = false
+
+    /// 快取已超過新鮮度門檻。畫面必須明確標示，不能讓使用者誤以為是現值。
+    @Published public private(set) var isShowingStaleData = false
+
     // MARK: - 相依
 
     private let api: MatchAPI
     private let store: OddsStore
     private let socket: OddsStreaming
     private let clock: AppClock
+    private let cache: SnapshotCaching?
     private let coalescer = UpdateCoalescer()
 
     // MARK: - 內部狀態
@@ -50,17 +57,22 @@ public final class MatchListViewModel: ObservableObject {
     /// 每個待更新場次「最早」那筆推播的產生時刻，用來量測推播→畫面的延遲。
     private var pendingSentAt: [Int: UInt64] = [:]
     private var streamTask: Task<Void, Never>?
+    /// 記錄前一個連線狀態，用來辨識「重連成功」這個轉換 ——
+    /// 只看到 `.connected` 無法分辨是首次連線還是斷線後接回來。
+    private var previousConnectionState: OddsConnectionState = .idle
 
     public init(
         api: MatchAPI,
         store: OddsStore,
         socket: OddsStreaming,
-        clock: AppClock = SystemClock()
+        clock: AppClock = SystemClock(),
+        cache: SnapshotCaching? = nil
     ) {
         self.api = api
         self.store = store
         self.socket = socket
         self.clock = clock
+        self.cache = cache
     }
 
     // MARK: - 生命週期
@@ -79,6 +91,10 @@ public final class MatchListViewModel: ObservableObject {
             break
         }
         loadState = .loading
+
+        // 冷啟動先把上次的快照畫出來（毫秒級），再去打 API。
+        // 沒有這一步，使用者要盯著轉圈等 200~600ms 才看得到任何東西。
+        await applyCachedSnapshotIfAvailable()
 
         do {
             // 兩支 API 沒有先後相依，並行送出。
@@ -110,8 +126,10 @@ public final class MatchListViewModel: ObservableObject {
             )
 
             orderedMatchIDs = sorted.map(\.id)
+            isShowingCachedData = false
             loadState = .loaded
 
+            await saveSnapshot()
             startStreamingIfNeeded()
             await socket.connect()
         } catch {
@@ -126,6 +144,7 @@ public final class MatchListViewModel: ObservableObject {
     /// 的推播一併算進去，讓 Debug HUD 顯示的更新率失真。
     public func pauseStreaming() async {
         await socket.disconnect()
+        await saveSnapshot()
     }
 
     /// 畫面回到前景時呼叫：重新連上推播來源。
@@ -218,7 +237,84 @@ public final class MatchListViewModel: ObservableObject {
         await socket.setUpdatesPerSecond(rate)
     }
 
+    public func simulateDisconnection() async {
+        await socket.simulateDisconnection()
+    }
+
     // MARK: - Private
+
+    /// 重連成功後的全量對帳（`docs/spec.md` §FR-6.4）。
+    ///
+    /// **這是重連功能真正的重點，也是最容易被漏掉的一半。**
+    /// 斷線期間的推播是永久遺失的：只重連而不重抓 `GET /odds`，那些場次會
+    /// 永遠停在斷線前的舊賠率，直到它剛好又被推播到為止。這個 bug 不會 crash、
+    /// 沒有 log、測不出來，只會讓畫面默默顯示錯誤的數字。
+    private func resynchronize() async {
+        guard loadState == .loaded else { return }
+
+        do {
+            let odds = try await api.fetchOdds()
+            await store.replaceAll(with: odds)
+
+            let snapshot = await store.snapshot()
+            for matchID in orderedMatchIDs {
+                guard let match = matchesByID[matchID] else { continue }
+                rowsByID[matchID] = MatchRow(
+                    match: match,
+                    odds: snapshot.odds[matchID],
+                    change: .unchanged
+                )
+            }
+            // 對帳是校正而非賠率跳動，因此不標記漲跌，也不觸發整頁閃爍。
+            objectWillChange.send()
+        } catch {
+            // 對帳失敗不該讓畫面壞掉：既有資料仍可顯示，
+            // 下次重連或使用者重新進入畫面時會再試一次。
+            connectionState = .failed
+        }
+    }
+
+    // MARK: - 快取
+
+    private func applyCachedSnapshotIfAvailable() async {
+        guard
+            orderedMatchIDs.isEmpty,
+            let cache,
+            let cached = await cache.load()
+        else {
+            return
+        }
+
+        let sorted = MatchSorting.sorted(cached.matches)
+        matchesByID = Dictionary(
+            sorted.map { ($0.id, $0) },
+            uniquingKeysWith: { _, new in new }
+        )
+        let oddsByID = Dictionary(
+            cached.odds.map { ($0.matchID, $0) },
+            uniquingKeysWith: { _, new in new }
+        )
+        rowsByID = Dictionary(
+            sorted.map { ($0.id, MatchRow(match: $0, odds: oddsByID[$0.id], change: .unchanged)) },
+            uniquingKeysWith: { _, new in new }
+        )
+        orderedMatchIDs = sorted.map(\.id)
+
+        // 過期的快取仍然顯示，但必須讓使用者知道。直接拿舊賠率當現值呈現，
+        // 在博弈情境是最危險的一類錯誤。
+        isShowingCachedData = true
+        isShowingStaleData = cached.isStale(now: clock.now)
+    }
+
+    private func saveSnapshot() async {
+        guard let cache, !orderedMatchIDs.isEmpty else { return }
+
+        let matches = orderedMatchIDs.compactMap { matchesByID[$0] }
+        let odds = orderedMatchIDs.compactMap { rowsByID[$0]?.odds }
+        await cache.save(
+            CachedSnapshot(matches: matches, odds: odds, savedAt: clock.now)
+        )
+    }
 
     /// 建立事件消費者，並確保整個 ViewModel 生命週期內**只建立一次**。
     ///
@@ -240,22 +336,33 @@ public final class MatchListViewModel: ObservableObject {
     private func handle(_ event: OddsStreamEvent) async {
         switch event {
         case .connectionState(let state):
+            let wasReconnecting: Bool
+            if case .reconnecting = previousConnectionState {
+                wasReconnecting = true
+            } else {
+                wasReconnecting = false
+            }
+            previousConnectionState = state
             connectionState = state
+
+            if wasReconnecting, state == .connected {
+                await resynchronize()
+            }
 
         case .updates(let updates):
             guard !updates.isEmpty else { return }
 
-            let accepted = await store.apply(updates)
-            stats.recordBatch(received: updates.count, applied: accepted.count)
+            let result = await store.apply(updates)
+            stats.recordBatch(received: updates.count, applied: result.acceptedCount)
 
             // 只記錄每場「最早」那筆的送出時刻：一場比賽在同一個視窗內被更新
             // 多次時，使用者感受到的延遲是從第一筆算起，不是最後一筆。
-            for update in updates where accepted.contains(update.matchID) {
+            for update in updates where result.changedMatchIDs.contains(update.matchID) {
                 let existing = pendingSentAt[update.matchID]
                 pendingSentAt[update.matchID] = min(existing ?? .max, update.sentAtNanos)
             }
 
-            coalescer.ingest(accepted)
+            coalescer.ingest(result.changedMatchIDs)
         }
     }
 }

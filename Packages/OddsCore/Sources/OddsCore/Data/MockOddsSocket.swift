@@ -14,15 +14,22 @@ public actor MockOddsSocket: OddsStreaming {
         public var updatesPerSecond: Int
         /// 節拍間隔。每個節拍送出 `updatesPerSecond / 每秒節拍數` 筆。
         public var tickInterval: Duration
+        public var reconnectPolicy: ReconnectPolicy
+        /// 模擬「重連要試幾次才成功」，讓退避行為在 demo 中看得見。
+        public var failedReconnectAttempts: Int
 
         public init(
             seed: UInt64 = 20_250_704,
             updatesPerSecond: Int = 10,
-            tickInterval: Duration = .milliseconds(100)
+            tickInterval: Duration = .milliseconds(100),
+            reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
+            failedReconnectAttempts: Int = 2
         ) {
             self.seed = seed
             self.updatesPerSecond = updatesPerSecond
             self.tickInterval = tickInterval
+            self.reconnectPolicy = reconnectPolicy
+            self.failedReconnectAttempts = failedReconnectAttempts
         }
     }
 
@@ -31,6 +38,7 @@ public actor MockOddsSocket: OddsStreaming {
     private let continuation: AsyncStream<OddsStreamEvent>.Continuation
     private let clock: AppClock
     private let tickInterval: Duration
+    private let reconnectPolicy: ReconnectPolicy
     private let matchIDs: [Int]
 
     private var configuration: Configuration
@@ -49,6 +57,7 @@ public actor MockOddsSocket: OddsStreaming {
         self.configuration = configuration
         self.clock = clock
         self.tickInterval = configuration.tickInterval
+        self.reconnectPolicy = configuration.reconnectPolicy
         self.generator = SeededGenerator(seed: configuration.seed)
         self.matchIDs = initialOdds.map(\.matchID)
         self.lastKnown = Dictionary(
@@ -87,6 +96,49 @@ public actor MockOddsSocket: OddsStreaming {
 
     public func setUpdatesPerSecond(_ rate: Int) {
         configuration.updatesPerSecond = max(1, rate)
+    }
+
+    /// 模擬非預期斷線，並自動進入重連流程（`docs/spec.md` §FR-6）。
+    ///
+    /// 與 `disconnect()` 的差別：後者是「使用者主動離開」，不該自動重連；
+    /// 這裡是「連線掉了」，必須自己想辦法接回來。
+    public func simulateDisconnection() {
+        guard loop != nil else { return }
+
+        loop?.cancel()
+        loop = Task { [weak self] in
+            await self?.runReconnect()
+        }
+    }
+
+    // MARK: - 重連
+
+    private func runReconnect() async {
+        var attempt = 1
+
+        while reconnectPolicy.shouldRetry(attempt: attempt) {
+            continuation.yield(.connectionState(.reconnecting(attempt: attempt)))
+
+            let delay = reconnectPolicy.delay(forAttempt: attempt, using: &generator)
+            do {
+                try await clock.sleep(for: delay)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+
+            if attempt > configuration.failedReconnectAttempts {
+                // 接回來了。runLoop 會送出 .connected 並恢復推播；
+                // 消費端據此觸發全量對帳（§FR-6.4）—— 斷線期間的推播是
+                // 永久遺失的，不重抓一次就會永遠停在舊賠率。
+                await runLoop()
+                return
+            }
+            attempt += 1
+        }
+
+        // 超過上限就停手，把控制權交還給使用者，而不是無限重試默默耗電。
+        continuation.yield(.connectionState(.failed))
     }
 
     // MARK: - 測試與 Debug 用

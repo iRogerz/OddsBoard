@@ -226,9 +226,30 @@ final class OddsStoreTests: XCTestCase {
         ])
 
         XCTAssertEqual(
-            accepted,
+            accepted.changedMatchIDs,
             [1002, 1003],
             "被丟棄的更新不該造成任何 UI 工作"
+        )
+        XCTAssertEqual(accepted.acceptedCount, 2)
+    }
+
+    /// 同一場在一個批次內被更新多次時，UI 只需更新一次，
+    /// 但統計上必須算成多筆「已接受」—— 否則會被誤報成「丟棄」。
+    /// 這個 bug 是在模擬器上加壓到 1000 筆/秒、盯著 Debug HUD 才發現的。
+    func test_同批次內同場多次更新_變動集合去重但接受數不去重() async {
+        let store = OddsStore()
+
+        let result = await store.apply([
+            .stub(matchID: 1001, teamA: 1.90, teamB: 2.10, sequence: 1),
+            .stub(matchID: 1001, teamA: 1.95, teamB: 2.05, sequence: 2),
+            .stub(matchID: 1002, teamA: 3.00, teamB: 1.40, sequence: 3)
+        ])
+
+        XCTAssertEqual(result.changedMatchIDs, [1001, 1002], "UI 只需更新兩個 cell")
+        XCTAssertEqual(
+            result.acceptedCount,
+            3,
+            "三筆都被接受了；用集合大小去推算丟棄數會憑空多出一筆"
         )
     }
 

@@ -35,4 +35,11 @@ public protocol OddsStreaming: Sendable {
     /// 調整推播頻率。用於 Debug 面板加壓測試（`docs/spec.md` §FR-2）：
     /// 每秒 10 筆對 UITableView 稱不上壓力，要證明架構撐得住得能當場加到 100 倍。
     func setUpdatesPerSecond(_ rate: Int) async
+
+    /// 模擬非預期斷線並自動進入重連流程。
+    ///
+    /// 與 `disconnect()` 的差別：後者是使用者主動離開，不該自動重連；
+    /// 這裡是連線掉了，必須自己想辦法接回來。Debug 面板用它來 demo
+    /// 重連退避與全量對帳（`docs/spec.md` §FR-6）。
+    func simulateDisconnection() async
 }

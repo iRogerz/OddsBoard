@@ -9,61 +9,60 @@
 
 ## 目前階段
 
-**Phase 4 — PEV 迴圈實作中。D1 完成，待人工驗證後進 D2**
-
-> ⚠️ **D1 的程式碼尚未經過編譯或測試執行。** 使用者要求由他自行驗證
-> （見下方決策紀錄 2026-08-05「驗證分工」）。下次 session 若要接手，
-> 請先確認 `swift test --package-path Packages/OddsCore` 是綠的。
+**Phase 4 — PEV 迴圈實作中。D1–D4 完成並驗證，待人工確認 D4 畫面後進 D5**
 
 ---
 
-## 已完成
+## 進度
 
-- [x] **Phase 1 Brain Dump** — 來源為 `OpenNet_IOS_Home_Test.pdf`，已完整抽出文字（2 頁）
-- [x] **Phase 2 Spec Interview** — 已問 2 題並取得決議（見下方決策紀錄）
-- [x] **Phase 3a Feature Spec** — `docs/spec.md` v0.1 草案完成
+| 階段 | 狀態 |
+|---|---|
+| Phase 1 Brain Dump（來源 `OpenNet_IOS_Home_Test.pdf`）| ✅ |
+| Phase 2 Spec Interview | ✅ |
+| Phase 3a Feature Spec `docs/spec.md` | ✅ |
+| Phase 3b 專案憲法 `CLAUDE.md` | ✅ |
+| 品質閘門（5 條 SwiftLint custom rule，已實測會擋）| ✅ |
+| SPM 模組 `OddsCore` / `OddsPresentation` / `OddsUI` | ✅ |
+| D1 Domain + `actor OddsStore` + `MockAPIClient` | ✅ 已驗證 |
+| D2 `MockOddsSocket` + `UpdateCoalescer` + `MatchListViewModel` | ✅ 已驗證 |
+| D3 `UITableView` + diffable + 漲跌閃爍 | ✅ 已驗證 |
+| Code review 修正輪（6 項）| ✅ 已驗證 |
+| D4 快取 + 重連對帳 + 詳情頁 + Debug HUD | ⏳ 待人工確認畫面 |
+| D5 `ARCHITECTURE.md` + Instruments + 錄影 | ⬜ |
+| Phase 6 Skill 萃取 | ⬜ |
 
-- [x] **開工前置作業** — Xcode 專案 `OddsBoard` 建立完成、Storyboard 移除、手動 UIWindow 啟動可運行
-- [x] **Repo 建立並推送** — `git@github.com:iRogerz/OddsBoard.git`（private）
+**測試數**：`OddsCore` 68 + `OddsPresentation` 29 + `OddsBoardTests` 16 = **113**
 
-- [x] **Phase 3b** — `CLAUDE.md` 專案憲法完成
-- [x] **品質閘門** — `.swiftlint.yml` 五條 custom rule，已掛進 build phase；
-      以探針檔實測四條規則皆正確觸發 error
-- [x] **SPM 模組** — `Packages/OddsCore`、`Packages/OddsUI` 建立並接進 xcodeproj
-- [x] **D1** — Domain 模型、`AppClock`、`SeededGenerator`、`MockAPIClient`、
-      `actor OddsStore` 與 3 個測試檔（共 30 個測試案例）
-
-- [x] **D1 已由使用者驗證** — `swift test` 全數通過、Xcode build 成功
-- [x] **D2** — `OddsStreaming` protocol、`MockOddsSocket`、`UpdateCoalescer`、
-      `StreamStats`、`MatchListViewModel`，新增 `Packages/OddsPresentation` 模組
-
-## 待辦
-
-- [x] **D2 已驗證** — 69 passed / 0 failures
-- [x] **D3** — `MatchCell`、`MatchListViewController`（diffable + CADisplayLink 節拍 +
-      可見範圍交集 + 漲跌閃爍）、`MockDataset` 抽離、`OddsBoardTests` 目標與 11 個 UI 測試
-
-- [x] **D3 已驗證** — 模擬器實測閃爍正常；swift test 69 + OddsBoardTests 14 全過
-- [x] **Code review 修正輪** — 6 項發現已修（見下方決策紀錄）
+---
 
 ## 待辦
 
-- [ ] **人工驗證修正輪**：Xcode build + ⌘U
-- [ ] **D4** — 快取、重連 + 對帳、詳情頁、Debug HUD
-- [ ] **D5** — `ARCHITECTURE.md`、Instruments 驗證、錄影
+- [ ] **人工驗證 D4**：Xcode build + ⌘U；肉眼確認詳情頁、長按開 Debug 面板、
+      加壓到 1000 筆/秒仍順暢、模擬斷線可看到重連與對帳、pop 回列表無載入過程
+- [ ] **D5** — `ARCHITECTURE.md`（含下方「刻意保留項」）、Instruments 驗證、操作錄影
+- [ ] **Phase 6** — 萃取可重用的 SKILL.md
 
-### Code review 未處理項（刻意保留，D5 寫進 ARCHITECTURE.md 的「已知限制」）
+### 刻意保留、不修的項目（D5 寫進 ARCHITECTURE.md 的「已知限制」）
 
 - `MockOddsSocket` 的連線狀態事件與賠率資料共用會丟棄的 `bufferingNewest(256)`
   緩衝，極高負載下狀態事件可能被丟掉。正解是控制事件走獨立不丟棄的通道。
 - `OddsStore.replaceAll` 未清掉不在新資料中的比賽的 `acceptedSequence` 與
   `histories`。本專案比賽集合固定，不會觸發。
-- [ ] **D3** — `MatchListViewController` + diffable data source + 更新合併器 + 漲跌閃爍
-- [ ] **D4** — 快取、重連 + 對帳、詳情頁、Debug HUD
-- [ ] **D5** — `ARCHITECTURE.md`、Instruments 驗證、錄影
-- [ ] **Phase 4** — Context Reset (`/clear`) 後進入 PEV 迴圈實作，實作 agent 只讀 `CLAUDE.md` + `docs/spec.md`
-- [ ] **Phase 5** — Anti-Drift + Hashimoto（每個 bug 留下一條 lint/test）
-- [ ] **Phase 6** — Skill 萃取
+
+---
+
+## D4 的關鍵設計
+
+- **重連的一半是對帳**：斷線期間的推播永久遺失，只重連不重抓 `GET /odds`，
+  那些場次會永遠停在舊賠率且不會自我修正。`MatchListViewModel.resynchronize()`
+  在偵測到 `.reconnecting → .connected` 的轉換時觸發。
+- **退避加抖動**：1/2/4/8/16/30 秒上限，每次 ±20%。抖動是為了避免所有客戶端
+  同時重連把剛恢復的伺服器再打掛（thundering herd）。
+- **快取分兩種情境**：冷啟動讀磁碟快照先畫出來，離開畫面時寫入；同一次啟動內的
+  push/pop 則靠 ViewModel 由導覽控制器持有而不重建。過期快照仍顯示但加警示橫幅 ——
+  直接拿舊賠率當現值是博弈情境最危險的一類錯誤。
+- **快取放 Caches 目錄**：可重建的衍生資料，系統該有權在空間不足時回收，
+  也不該被備份到 iCloud。寫入採原子替換，避免半截 JSON。
 
 ---
 

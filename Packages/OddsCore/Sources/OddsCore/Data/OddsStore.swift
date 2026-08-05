@@ -53,16 +53,29 @@ public actor OddsStore {
         return true
     }
 
+    /// 批次套用的結果。
+    ///
+    /// `changedMatchIDs` 與 `acceptedCount` 必須分開回報：
+    /// 同一場比賽在一個批次內被更新多次時，前者只會計一次（那正是 UI 需要的），
+    /// 後者才是實際被接受的筆數。若用前者的數量去推算「丟棄數」，會把
+    /// 「同批次內被較新值取代」誤算成「因序號過舊而丟棄」——
+    /// 高頻推播下這個誤差極大，讓統計完全失去參考價值。
+    public struct BatchResult: Sendable {
+        public let changedMatchIDs: Set<Int>
+        public let acceptedCount: Int
+    }
+
     /// 批次套用。
-    /// - Returns: 實際發生變動的 matchID 集合 —— 呼叫端只需要對這些 id
-    ///   做 UI 更新，被丟棄的更新不該造成任何畫面工作。
+    /// - Returns: 變動的 matchID 集合與實際接受的筆數。
     @discardableResult
-    public func apply(_ updates: [OddsUpdate]) -> Set<Int> {
-        var accepted: Set<Int> = []
+    public func apply(_ updates: [OddsUpdate]) -> BatchResult {
+        var changed: Set<Int> = []
+        var acceptedCount = 0
         for update in updates where apply(update) {
-            accepted.insert(update.matchID)
+            changed.insert(update.matchID)
+            acceptedCount += 1
         }
-        return accepted
+        return BatchResult(changedMatchIDs: changed, acceptedCount: acceptedCount)
     }
 
     /// 整批覆寫所有賠率。用於初次載入，以及**斷線重連後的全量對帳**。

@@ -32,6 +32,7 @@ actor FakeOddsSocket: OddsStreaming {
     private(set) var connectCallCount = 0
     private(set) var disconnectCallCount = 0
     private(set) var requestedRate: Int?
+    private(set) var simulateDisconnectionCallCount = 0
 
     init() {
         let pipe = AsyncStream<OddsStreamEvent>.makePipe()
@@ -49,6 +50,10 @@ actor FakeOddsSocket: OddsStreaming {
 
     func setUpdatesPerSecond(_ rate: Int) {
         requestedRate = rate
+    }
+
+    func simulateDisconnection() {
+        simulateDisconnectionCallCount += 1
     }
 
     nonisolated func emit(_ event: OddsStreamEvent) {
@@ -92,4 +97,36 @@ enum Fixture {
             sentAtNanos: 1
         )
     }
+}
+
+/// 記憶體版快取替身，讓測試不必碰檔案系統。
+actor InMemorySnapshotCache: SnapshotCaching {
+
+    private var stored: CachedSnapshot?
+    private(set) var saveCount = 0
+
+    init(initial: CachedSnapshot? = nil) {
+        self.stored = initial
+    }
+
+    func load() -> CachedSnapshot? { stored }
+
+    func save(_ snapshot: CachedSnapshot) {
+        stored = snapshot
+        saveCount += 1
+    }
+
+    func clear() { stored = nil }
+}
+
+/// 可控時間的時鐘，用來測快取的新鮮度判斷。
+final class FixedClock: AppClock, @unchecked Sendable {
+
+    private let fixed: Date
+
+    init(now: Date) { self.fixed = now }
+
+    var now: Date { fixed }
+    var monotonicNanos: UInt64 { 1_000_000 }
+    func sleep(for duration: Duration) async throws { await Task.yield() }
 }
