@@ -9,7 +9,11 @@
 
 ## 目前階段
 
-**Phase 2/3 — Spec Interview 完成，規格書草案已產出，等待人工審閱**
+**Phase 4 — PEV 迴圈實作中。D1 完成，待人工驗證後進 D2**
+
+> ⚠️ **D1 的程式碼尚未經過編譯或測試執行。** 使用者要求由他自行驗證
+> （見下方決策紀錄 2026-08-05「驗證分工」）。下次 session 若要接手，
+> 請先確認 `swift test --package-path Packages/OddsCore` 是綠的。
 
 ---
 
@@ -22,11 +26,21 @@
 - [x] **開工前置作業** — Xcode 專案 `OddsBoard` 建立完成、Storyboard 移除、手動 UIWindow 啟動可運行
 - [x] **Repo 建立並推送** — `git@github.com:iRogerz/OddsBoard.git`（private）
 
+- [x] **Phase 3b** — `CLAUDE.md` 專案憲法完成
+- [x] **品質閘門** — `.swiftlint.yml` 五條 custom rule，已掛進 build phase；
+      以探針檔實測四條規則皆正確觸發 error
+- [x] **SPM 模組** — `Packages/OddsCore`、`Packages/OddsUI` 建立並接進 xcodeproj
+- [x] **D1** — Domain 模型、`AppClock`、`SeededGenerator`、`MockAPIClient`、
+      `actor OddsStore` 與 3 個測試檔（共 30 個測試案例）
+
 ## 待辦
 
-- [ ] **Phase 3b** — 產出 `CLAUDE.md`（專案憲法：技術棧、不可違反的架構規則、目錄結構、agent 行為指令）
-- [ ] 建立 `Packages/OddsCore`、`Packages/OddsUI` 兩個 SPM package 與 SwiftLint 規則
-- [ ] **D1** — Domain 模型、`MockAPIClient`、`actor OddsStore` + 單元測試
+- [ ] **人工驗證 D1**：`swift test --package-path Packages/OddsCore` 需全綠
+- [ ] **D2** — `MockOddsSocket`（AsyncStream 推播、每秒最多 10 筆）、
+      `MatchListViewModel`（`@MainActor` + Combine `@Published`）
+- [ ] **D3** — `MatchListViewController` + diffable data source + 更新合併器 + 漲跌閃爍
+- [ ] **D4** — 快取、重連 + 對帳、詳情頁、Debug HUD
+- [ ] **D5** — `ARCHITECTURE.md`、Instruments 驗證、錄影
 - [ ] **Phase 4** — Context Reset (`/clear`) 後進入 PEV 迴圈實作，實作 agent 只讀 `CLAUDE.md` + `docs/spec.md`
 - [ ] **Phase 5** — Anti-Drift + Hashimoto（每個 bug 留下一條 lint/test）
 - [ ] **Phase 6** — Skill 萃取
@@ -43,6 +57,10 @@
 | 2026-08-05 | **Xcode 專案由使用者手動建立** | 手刻 pbxproj 脆弱；已給出建立參數（App template / Storyboard interface / Testing None / iOS 16.0）|
 | 2026-08-05 | **Repo 根目錄設在 `OddsBoard/`，題目 PDF 留在 repo 外層** | 保留 Xcode 既有 git 歷史（不必刪 `.git`），且公司內部題目 PDF 在物理上不可能被誤 push |
 | 2026-08-05 | **GitHub repo 設為 private** | take-home 解答若公開會被永久索引；交件時邀請面試官為 collaborator 或屆時再轉 public |
+| 2026-08-05 | **驗證分工**：agent 不跑 build 與模擬器，由使用者自行驗證 | 使用者指示。agent 仍會跑不需編譯的檢查（SwiftLint、pbxproj 解析）|
+| 2026-08-05 | **`OddsCore` 宣告支援 macOS** | 不是為了跑在 Mac 上，而是讓「Domain 不得 import UIKit」成為編譯期保證，並讓測試免模擬器 |
+| 2026-08-05 | **失敗注入改為確定性模式而非機率** | 題目寫「失敗率」，但機率式失敗會造成偶發紅燈，而偶發紅燈最後一定會被忽略。改用 `.never` / `.always` / `.firstCalls(n)` |
+| 2026-08-05 | **`OddsChange` 改為兩隊分開記錄方向** | 原 spec §3.1 設計為單一方向；實際上同一次推播中 teamA 漲、teamB 跌是常態，單一方向會漏掉一邊。spec 已同步更新 |
 | 2026-08-05 | **Concurrency 與 Combine 並用，邊界明確** | 跨執行緒狀態存取 → actor/AsyncStream；ViewModel→View 綁定 → Combine。文件的架構說明文件正好要求說明兩者使用場景 |
 | 2026-08-05 | Deployment target iOS 16.0 | `reconfigureItems` 需 iOS 15+，是「不整頁 reload」的核心 API |
 

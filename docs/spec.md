@@ -72,13 +72,21 @@ struct Odds: Hashable, Codable, Sendable {
 }
 
 /// 畫面實際消費的合併後模型
-struct MatchRow: Hashable, Sendable {
+struct MatchRow: Hashable, Sendable, Identifiable {
+    var id: Int { match.id }
     let match: Match
-    let odds: Odds?           // 🧩 可為 nil：odds 尚未載入或該場無盤口
-    let lastChange: OddsChange?  // 🧩 給漲跌視覺提示用
+    let odds: Odds?          // 🧩 可為 nil：odds 尚未載入或該場無盤口
+    let change: OddsChange   // 🧩 給漲跌視覺提示用
 }
 
-enum OddsChange: Sendable { case up, down, none }
+/// 🧩 兩隊分開記錄，不是單一方向。
+/// 同一次推播中 teamA 上漲、teamB 下跌是常態，
+/// 用單一方向表示必然會漏掉其中一邊的閃爍。
+struct OddsChange: Hashable, Sendable {
+    enum Direction: Sendable { case up, down, unchanged }
+    let teamA: Direction
+    let teamB: Direction
+}
 ```
 
 ### 3.2 傳輸模型（Mock API 回傳格式，依文件範例）
@@ -124,9 +132,10 @@ struct OddsUpdate: Sendable {
 | FR-1.1 | `GET /matches` 回傳約 100 筆比賽 | Mock client 回傳 100 筆，含 matchID / 隊名 / startTime |
 | FR-1.2 | `GET /odds` 回傳每場初始賠率 | 回傳筆數 == matches 筆數 |
 | FR-1.3 | 🧩 模擬網路延遲 200–600ms 隨機 | 首屏有真實的 loading 狀態，而非瞬間出現 |
-| FR-1.4 | 🧩 可注入失敗率（預設 0%，可設 100%）| 錯誤路徑可被單元測試與手動 demo 觸發 |
+| FR-1.4 | 🧩 可注入失敗（`.never` / `.always` / `.firstCalls(n)`）| 錯誤路徑可被單元測試與手動 demo 觸發 |
 
 > 🧩 **為什麼要能模擬失敗**：文件完全沒提錯誤處理，但沒有 loading / empty / error 三態的列表在 code review 中是明顯扣分項。做了失敗注入，錯誤 UI 才不是死碼。
+> 🧩 **為什麼是確定性模式而非失敗率**：機率式失敗會讓測試偶爾紅燈，而偶爾紅燈的測試最後一定會被當成雜訊忽略。確定性的 `.firstCalls(n)` 反而能精準驗證「重試後恢復」這條路徑。
 
 **🧩 Mock 資料生成規則**（文件未定義，我定義）：
 - `startTime` 以 **App 啟動時間為基準**往後散佈 0–48 小時，避免交件當天全部變成「已開賽」。

@@ -1,0 +1,91 @@
+included:
+  - OddsBoard
+  - Packages/OddsCore/Sources
+  - Packages/OddsUI/Sources
+
+excluded:
+  - Packages/OddsCore/.build
+  - Packages/OddsUI/.build
+
+# ─────────────────────────────────────────────────────────────
+# 專案憲法的機械執行（CLAUDE.md「不可違反的規則」）
+#
+# 這些不是風格偏好，而是把 docs/spec.md 的硬性條件變成編譯錯誤。
+# 靠自律會漏，靠編譯器不會。
+# ─────────────────────────────────────────────────────────────
+#
+# 注意 match_kinds：每條規則都限定只比對程式碼符號，不比對註解與字串。
+# 否則「這裡不可以用 NSLock」這種說明性註解本身就會觸發規則。
+custom_rules:
+  no_reload_data:
+    name: "禁止整頁 reload"
+    regex: '\breloadData\s*\('
+    match_kinds:
+      - identifier
+    message: "spec §4 FR-3.3：賠率更新必須只更新對應 cell。請改用 diffable data source 的 reconfigureItems(_:)。"
+    severity: error
+
+  no_swiftui:
+    name: "禁止 SwiftUI"
+    regex: '^\s*import\s+SwiftUI'
+    match_kinds:
+      - keyword
+      - identifier
+    message: "考題硬性限制：限定使用 UIKit，不可使用 SwiftUI。"
+    severity: error
+
+  no_rxswift:
+    name: "禁止 RxSwift"
+    regex: '^\s*import\s+(RxSwift|RxCocoa|RxRelay)'
+    match_kinds:
+      - keyword
+      - identifier
+    message: "考題指定 Swift Concurrency 或 Combine。RxSwift 會取代兩者，不在允許範圍。"
+    severity: error
+
+  no_lock_primitives:
+    name: "禁止手動鎖"
+    regex: '\b(NSLock|NSRecursiveLock|pthread_mutex|DispatchSemaphore)\b'
+    match_kinds:
+      - identifier
+      - typeidentifier
+    message: "spec §4 FR-4：共享可變狀態一律由 actor 保護。手動鎖的正確性靠呼叫端自律，編譯器無法檢查。"
+    severity: error
+
+  no_real_sleep:
+    name: "禁止真的 sleep"
+    regex: '\bThread\.sleep\s*\('
+    match_kinds:
+      - identifier
+    message: "spec §9：時間相關邏輯走注入的 AppClock，測試不得真的等待。"
+    severity: error
+
+disabled_rules:
+  - todo                    # 開發期間允許 TODO；交件前清空
+  - trailing_comma
+
+opt_in_rules:
+  - empty_count
+  - explicit_init
+  - first_where
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - redundant_nil_coalescing
+  - unneeded_parentheses_in_closure_argument
+  - weak_delegate
+
+line_length:
+  warning: 120
+  error: 160
+  ignores_comments: true
+
+identifier_name:
+  excluded: [id, up, to, x, y]
+
+type_body_length:
+  warning: 300
+  error: 400
+
+file_length:
+  warning: 400
+  error: 600
