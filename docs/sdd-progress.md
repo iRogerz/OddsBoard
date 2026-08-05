@@ -39,7 +39,14 @@
 
 ## 待辦
 
-- [ ] **人工驗證 D2**：兩個 package 的 `swift test` 需全綠
+- [x] **D2 已驗證** — 69 passed / 0 failures
+- [x] **D3** — `MatchCell`、`MatchListViewController`（diffable + CADisplayLink 節拍 +
+      可見範圍交集 + 漲跌閃爍）、`MockDataset` 抽離、`OddsBoardTests` 目標與 11 個 UI 測試
+
+## 待辦
+
+- [ ] **人工驗證 D3**：Xcode build + ⌘U（`OddsBoardTests` 需綠）；肉眼確認閃爍
+- [ ] 建議跑一次 `/code-review`（D3 是正確性風險最集中的一段）
 - [ ] **D3** — `MatchListViewController` + diffable data source + 更新合併器 + 漲跌閃爍
 - [ ] **D4** — 快取、重連 + 對帳、詳情頁、Debug HUD
 - [ ] **D5** — `ARCHITECTURE.md`、Instruments 驗證、錄影
@@ -69,7 +76,10 @@
 | 2026-08-05 | **`orderedMatchIDs` 與 row 資料分開發布** | 賠率更新不改變順序，所以 snapshot 不需重 apply；若把 `[MatchRow]` 整包發布，每次更新都要重建 100 筆陣列 |
 | 2026-08-05 | **不轉 `.xcworkspace`，local package 測試一律走 `swift test`**（使用者確認）| 以 `XCLocalSwiftPackageReference` 掛在 .xcodeproj 下的 package，Xcode 不會把測試目標列進任何 scheme 的 test action。轉 workspace 需再動一次 pbxproj，換來的只是 ⌘U 的便利性；而核心測試用 SwiftPM 本來就更快 |
 | 2026-08-05 | **維持 3 個模組**（使用者確認）| 曾評估併回 2 個。關鍵釐清：測試速度與「禁 import UIKit」的編譯期保證，兩個方案都保留，**唯一差別是依賴方向是編譯期強制或資料夾慣例**。選 3 個以維持「規則由機器強制」這條貫穿全專案的論述 |
-| 2026-08-05 | **UI 層測試改用原生 iOS Unit Testing Bundle target** | D3 開始時由使用者在 Xcode 新增。UI 測試要驗的是 `reconfigureItems` 與「未整頁 reload」，需要真實 UITableView；原生 target 也讓 ⌘U 對 UI 測試有意義 |
+| 2026-08-05 | **UI 層測試改用原生 iOS Unit Testing Bundle target** | 已由使用者新增 `OddsBoardTests`。UI 測試要驗的是 `reconfigureItems` 與「未整頁 reload」，需要真實 UITableView；原生 target 也讓 ⌘U 對 UI 測試有意義 |
+| 2026-08-05 | **漲跌閃爍改用明確指定 fromValue/toValue 的 `CABasicAnimation`** | **實際發生的 bug，且靠讀程式碼找不到、必須實際跑模擬器才抓到。** 原寫法是 `label.backgroundColor = color` 後用 `UIView.animate` 淡回 `.clear`：設定背景色只寫進 model layer、該 runloop 尚未 commit，UIKit 建立動畫時取到的起始值仍是上一幀的 `.clear`，動畫變成 clear → clear，完全看不見。惡劣之處在於動畫確實被加到 layer 上、`animationKeys()` 有值、無任何警告。Hashimoto 產物：`MatchCellTests.test_閃爍動畫的起始顏色必須是不透明的` 直接斷言 `fromValue` 的 alpha > 0 |
+| 2026-08-05 | 動畫改在 `dataSource.apply` 之後觸發，不寫在 cellProvider 內 | 職責分離：cellProvider 只負責內容；且它也會因滾動被呼叫，在那裡播動畫會讓滾過去的格子全在閃。（註：先前一度誤判這是不閃的根因，實際根因見上一列）|
+| 2026-08-05 | 除錯方法論：連兩次盲猜失敗後改為實測 | 用「只設背景色、不做動畫」的區隔測試，一次就定位到問題在動畫而非佈局或呼叫路徑。教訓：UIKit 的渲染行為不要靠讀程式碼推論 |
 | 2026-08-05 | **Concurrency 與 Combine 並用，邊界明確** | 跨執行緒狀態存取 → actor/AsyncStream；ViewModel→View 綁定 → Combine。文件的架構說明文件正好要求說明兩者使用場景 |
 | 2026-08-05 | Deployment target iOS 16.0 | `reconfigureItems` 需 iOS 15+，是「不整頁 reload」的核心 API |
 

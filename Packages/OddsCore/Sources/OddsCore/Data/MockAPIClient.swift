@@ -21,23 +21,15 @@ public actor MockAPIClient: MatchAPI {
     public struct Configuration: Sendable {
 
         public var seed: UInt64
-        public var matchCount: Int
-        /// 刻意讓這麼多場比賽共用同一個開賽時間，用來確保排序穩定性
-        /// （`docs/spec.md` §4 FR-3.2）真的有被行使到。
-        public var duplicateStartTimeCount: Int
         public var latencyRange: ClosedRange<Int>
         public var failureMode: FailureMode
 
         public init(
             seed: UInt64 = 20_250_704,
-            matchCount: Int = 100,
-            duplicateStartTimeCount: Int = 5,
             latencyRange: ClosedRange<Int> = 200...600,
             failureMode: FailureMode = .never
         ) {
             self.seed = seed
-            self.matchCount = matchCount
-            self.duplicateStartTimeCount = duplicateStartTimeCount
             self.latencyRange = latencyRange
             self.failureMode = failureMode
         }
@@ -45,38 +37,50 @@ public actor MockAPIClient: MatchAPI {
 
     private let configuration: Configuration
     private let clock: AppClock
-    private let matches: [Match]
-    private let initialOdds: [Odds]
+    private let dataset: MockDataset
     private var callCount = 0
 
+    /// 注入既有資料集。Composition Root 應走這個入口，讓 API 與推播來源
+    /// 共用同一份初始賠率（見 `MockDataset`）。
+    public init(
+        dataset: MockDataset,
+        configuration: Configuration = Configuration(),
+        clock: AppClock = SystemClock()
+    ) {
+        self.dataset = dataset
+        self.configuration = configuration
+        self.clock = clock
+    }
+
+    /// 自行產生資料集的便利建構子，供測試使用。
     public init(
         configuration: Configuration = Configuration(),
+        datasetConfiguration: MockDataset.Configuration = MockDataset.Configuration(),
         clock: AppClock = SystemClock(),
         referenceDate: Date = Date()
     ) {
-        self.configuration = configuration
-        self.clock = clock
-
-        var generator = SeededGenerator(seed: configuration.seed)
-        let dataset = Self.makeDataset(
+        var datasetConfiguration = datasetConfiguration
+        datasetConfiguration.seed = configuration.seed
+        self.init(
+            dataset: MockDataset.make(
+                configuration: datasetConfiguration,
+                referenceDate: referenceDate
+            ),
             configuration: configuration,
-            referenceDate: referenceDate,
-            generator: &generator
+            clock: clock
         )
-        self.matches = dataset.matches
-        self.initialOdds = dataset.odds
     }
 
     // MARK: - MatchAPI
 
     public func fetchMatches() async throws -> [Match] {
         try await simulateRequest()
-        return matches
+        return dataset.matches
     }
 
     public func fetchOdds() async throws -> [Odds] {
         try await simulateRequest()
-        return initialOdds
+        return dataset.odds
     }
 
     // MARK: - Private
@@ -99,71 +103,4 @@ public actor MockAPIClient: MatchAPI {
             }
         }
     }
-
-    private static func makeDataset(
-        configuration: Configuration,
-        referenceDate: Date,
-        generator: inout SeededGenerator
-    ) -> (matches: [Match], odds: [Odds]) {
-
-        var matches: [Match] = []
-        var odds: [Odds] = []
-        matches.reserveCapacity(configuration.matchCount)
-        odds.reserveCapacity(configuration.matchCount)
-
-        // 開賽時間以「App 啟動時間」為基準往後散佈，而非寫死日期。
-        // 否則交件當天一打開，100 場比賽全部都是過去式。
-        let sharedStartTime = referenceDate.addingTimeInterval(6 * 3600)
-
-        for index in 0..<configuration.matchCount {
-            let matchID = 1001 + index
-
-            let startTime: Date
-            if index < configuration.duplicateStartTimeCount {
-                startTime = sharedStartTime
-            } else {
-                // 對齊到 5 分鐘，看起來像真的賽程表而不是隨機時間戳。
-                let offset = Int.random(in: 0...(48 * 12), using: &generator) * 300
-                startTime = referenceDate.addingTimeInterval(TimeInterval(offset))
-            }
-
-            let (teamA, teamB) = Self.makeTeamPair(using: &generator)
-            matches.append(
-                Match(id: matchID, teamA: teamA, teamB: teamB, startTime: startTime)
-            )
-
-            odds.append(
-                Odds(
-                    matchID: matchID,
-                    teamAOdds: Self.makeOddsValue(using: &generator),
-                    teamBOdds: Self.makeOddsValue(using: &generator)
-                )
-            )
-        }
-
-        return (matches, odds)
-    }
-
-    private static func makeTeamPair(
-        using generator: inout SeededGenerator
-    ) -> (String, String) {
-        let first = Int.random(in: 0..<teamNames.count, using: &generator)
-        var second = Int.random(in: 0..<teamNames.count, using: &generator)
-        if second == first {
-            second = (first + 1) % teamNames.count
-        }
-        return (teamNames[first], teamNames[second])
-    }
-
-    private static func makeOddsValue(using generator: inout SeededGenerator) -> Double {
-        // 賠率以 0.01 為單位，範圍取常見的 1.20 ~ 5.00。
-        Double(Int.random(in: 120...500, using: &generator)) / 100
-    }
-
-    private static let teamNames = [
-        "Eagles", "Tigers", "Lions", "Sharks", "Wolves", "Bears", "Falcons", "Panthers",
-        "Dragons", "Ravens", "Cobras", "Hawks", "Bulls", "Stallions", "Rhinos", "Jaguars",
-        "Vipers", "Titans", "Giants", "Warriors", "Knights", "Pirates", "Rangers", "Bandits",
-        "Comets", "Rockets", "Thunder", "Lightning", "Blizzard", "Cyclones", "Meteors", "Phoenix"
-    ]
 }
