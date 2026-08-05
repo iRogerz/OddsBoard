@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/*/.build/
+
+# 注意：Package.resolved 刻意「不」忽略。
+# 它鎖定第三方相依的確切版本，reviewer 才能重現與我完全相同的建置。
+
+# Instruments
+*.trace
+
+# 作業原始題目（公司內部文件，不進版控）
+*_Home_Test.pdf
