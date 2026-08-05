@@ -1,10 +1,12 @@
 included:
   - OddsBoard
   - Packages/OddsCore/Sources
+  - Packages/OddsPresentation/Sources
   - Packages/OddsUI/Sources
 
 excluded:
   - Packages/OddsCore/.build
+  - Packages/OddsPresentation/.build
   - Packages/OddsUI/.build
 
 # ─────────────────────────────────────────────────────────────

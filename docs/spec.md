@@ -316,13 +316,20 @@ struct OddsUpdate: Sendable {
 
 ```
 OddsBoard.xcodeproj
-├── App target          ← 只做 Composition Root + AppDelegate/SceneDelegate
+├── App target            ← 只做 Composition Root + AppDelegate/SceneDelegate
 └── Packages/
-    ├── OddsCore        ← Domain + Data。零第三方相依，禁止 import UIKit
-    │   └── Tests       ← 可用 `swift test` 在命令列跑，無需模擬器
-    └── OddsUI          ← Presentation。可 import UIKit / SnapKit / Combine
-        └── Tests       ← 需 xcodebuild + simulator
+    ├── OddsCore          ← Domain + Data。零第三方相依，禁 UIKit
+    │   └── Tests         ← `swift test` 在命令列跑，無需模擬器
+    ├── OddsPresentation  ← ViewModel。可用 Combine，禁 UIKit
+    │   └── Tests         ← 同上，無需模擬器
+    └── OddsUI            ← View 層。可 import UIKit / SnapKit
+        └── Tests         ← 需 xcodebuild + simulator
 ```
+
+🧩 **為什麼 ViewModel 要與 View 分成兩個模組**：ViewModel 不依賴 UIKit，只用
+Combine 對外綁定。把它留在 iOS-only 的 `OddsUI` 裡，它的測試就得靠模擬器跑 ——
+而 ViewModel 正是 MVVM 最該被測的一層。獨立出來後它的測試回到「命令列兩秒跑完」
+的快迴圈，同時「ViewModel 不得碰 UIKit」也變成編譯期保證。
 
 🧩 **為什麼值得多這一層**：
 - 「Domain 不依賴 UI」從資料夾慣例升級成**編譯期保證** — `OddsCore` 沒有 UIKit 可 import，寫錯直接編不過。這正是 §8「機械保證」的精神。

@@ -27,14 +27,15 @@ OddsBoard.xcodeproj
 ├── OddsBoard/              App target — Composition Root + Scene 啟動
 └── Packages/
     ├── OddsCore/           Domain + Data。零第三方相依，不得 import UIKit
-    └── OddsUI/             Presentation。UIKit / SnapKit / Combine
+    ├── OddsPresentation/   ViewModel。可用 Combine，不得 import UIKit
+    └── OddsUI/             View 層。UIKit / SnapKit
 ```
 
-依賴方向永遠向下：`App → OddsUI → OddsCore`。
+依賴方向永遠向下：`App → OddsUI → OddsPresentation → OddsCore`。
 
-`OddsCore` 同時宣告支援 macOS —— 這不是為了跑在 Mac 上，而是讓
-「Domain 層不得依賴 UI」成為**編譯期保證**：一旦有人 import UIKit，macOS
-平台立刻編譯失敗。附帶好處是它的測試不需要模擬器。
+`OddsCore` 與 `OddsPresentation` 同時宣告支援 macOS —— 這不是為了跑在 Mac 上，
+而是讓「這兩層不得依賴 UI」成為**編譯期保證**：一旦有人 import UIKit，macOS
+平台立刻編譯失敗。附帶好處是它們的測試不需要模擬器，包含最該被測的 ViewModel。
 
 ## 執行
 
@@ -50,7 +51,19 @@ open OddsBoard.xcodeproj
 swift test --package-path Packages/OddsCore
 ```
 
-Domain / Data 層的測試不依賴 UIKit，可直接在命令列跑完，無需模擬器。
+```bash
+swift test --package-path Packages/OddsPresentation
+```
+
+絕大多數測試都在這兩個模組。它們不依賴 UIKit，因此 SwiftPM 能為 macOS 建置
+並直接執行 —— 無需模擬器，秒級完成。這是開發時的主要迴圈。
+
+> **已知限制**：以 `XCLocalSwiftPackageReference` 掛在 `.xcodeproj` 下的 local
+> package，Xcode 不會把它們的測試目標列進 scheme 的 test action（自動產生的
+> package scheme 也只有 build action）。要在 Xcode 內以 ⌘U 跑，需改用
+> `.xcworkspace` 架構。本專案選擇不轉換：核心測試用 SwiftPM 更快，而需要真實
+> `UITableView` 的 UI 測試會另建 iOS Unit Testing Bundle target。
+
 所有時間相關邏輯（網路延遲、重連退避、快取 TTL）都走注入的 `AppClock`，
 測試中不會真的等待。
 

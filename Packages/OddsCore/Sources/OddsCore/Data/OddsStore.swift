@@ -109,6 +109,23 @@ public actor OddsStore {
         OddsSnapshot(odds: current, changes: changes)
     }
 
+    /// 只取指定幾場的賠率與變動方向。
+    ///
+    /// 高頻更新時不該用 `snapshot()`：每次 flush 都複製 100 筆，
+    /// 但實際變動的通常只有個位數。這個方法讓複製量正比於「真正變動的數量」，
+    /// 而不是資料集大小。
+    public func entries(for matchIDs: some Sequence<Int>) -> [Int: OddsEntry] {
+        var result: [Int: OddsEntry] = [:]
+        for matchID in matchIDs {
+            guard let odds = current[matchID] else { continue }
+            result[matchID] = OddsEntry(
+                odds: odds,
+                change: changes[matchID] ?? .unchanged
+            )
+        }
+        return result
+    }
+
     /// 清掉漲跌標記。cell 的閃爍動畫播完後呼叫，
     /// 避免使用者滾動時重用 cell 又閃一次早就過期的變動。
     public func clearChanges(for matchIDs: some Sequence<Int>) {
@@ -126,6 +143,18 @@ public actor OddsStore {
             entries.removeFirst(entries.count - historyLimit)
         }
         histories[odds.matchID] = entries
+    }
+}
+
+/// 單一場比賽的賠率與其變動方向。
+public struct OddsEntry: Hashable, Sendable {
+
+    public let odds: Odds
+    public let change: OddsChange
+
+    public init(odds: Odds, change: OddsChange) {
+        self.odds = odds
+        self.change = change
     }
 }
 

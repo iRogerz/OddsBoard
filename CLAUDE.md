@@ -16,10 +16,15 @@
 ```
 App target (OddsBoard/)     ← Composition Root、AppDelegate/SceneDelegate。只做組裝
 Packages/OddsCore           ← Domain + Data。零第三方相依，禁 UIKit
-Packages/OddsUI             ← Presentation。可用 UIKit / SnapKit / Combine
+Packages/OddsPresentation   ← ViewModel。可用 Combine，禁 UIKit
+Packages/OddsUI             ← View 層。可用 UIKit / SnapKit
 ```
 
-依賴方向永遠向下：`App → OddsUI → OddsCore`。跨層一律走 protocol，具體型別只在 `AppDependencies` 組裝。
+依賴方向永遠向下：`App → OddsUI → OddsPresentation → OddsCore`。
+跨層一律走 protocol，具體型別只在 `AppDependencies` 組裝。
+
+`OddsCore` 與 `OddsPresentation` 都宣告支援 macOS —— 不是為了跑在 Mac 上，
+而是讓「這兩層不得依賴 UIKit」成為編譯期保證，並讓它們的測試免模擬器。
 
 ## 非同步邊界（一句話）
 
@@ -43,12 +48,16 @@ Packages/OddsUI             ← Presentation。可用 UIKit / SnapKit / Combine
 ## 指令
 
 ```bash
-# OddsCore 測試（快，約 2 秒，無需模擬器）— 開發時的主要迴圈
+# 核心測試（快，無需模擬器）— 開發時的主要迴圈
 swift test --package-path Packages/OddsCore
+swift test --package-path Packages/OddsPresentation
 
-# 完整 build（需模擬器）
+# App build（需模擬器）
 xcodebuild -project OddsBoard.xcodeproj -scheme OddsBoard \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build
+
+# 注意：local package 的測試目標無法從 Xcode scheme 執行（見 README「已知限制」）。
+# 測試一律走上面的 swift test。
 
 # Lint
 swiftlint --strict

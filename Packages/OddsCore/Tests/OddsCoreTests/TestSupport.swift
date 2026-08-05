@@ -23,11 +23,18 @@ final class ImmediateClock: AppClock {
     /// 固定時間，讓依賴「現在」的資料生成具可重現性。
     var now: Date { Date(timeIntervalSince1970: 1_720_099_200) }
 
-    var monotonicNanos: UInt64 { DispatchTime.now().uptimeNanoseconds }
+    /// 固定值。假時鐘若在這裡漏出真實時間，任何「相同輸入 → 相同輸出」的
+    /// 斷言都會偶發失敗 —— 而偶發失敗的測試最後一定會被當成雜訊忽略。
+    /// 需要真實延遲量測的測試請改注入 `SystemClock`。
+    var monotonicNanos: UInt64 { 1_000_000 }
 
     func sleep(for duration: Duration) async throws {
         await recorder.record(duration)
-        // 刻意不等待。
+        // 刻意不等待實際時間，但仍讓出執行權：
+        // 否則以此時鐘驅動的迴圈（例如推播的節拍）會變成忙迴圈，
+        // 取消訊號永遠沒有機會被處理。
+        try Task.checkCancellation()
+        await Task.yield()
     }
 }
 

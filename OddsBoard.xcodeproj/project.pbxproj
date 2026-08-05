@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0DDC0DE000000000000000A1 /* OddsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 0DDC0DE000000000000000C1 /* OddsCore */; };
 		0DDC0DE000000000000000A2 /* OddsUI in Frameworks */ = {isa = PBXBuildFile; productRef = 0DDC0DE000000000000000C2 /* OddsUI */; };
+		0DDC0DE000000000000000A3 /* OddsPresentation in Frameworks */ = {isa = PBXBuildFile; productRef = 0DDC0DE000000000000000C3 /* OddsPresentation */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,6 +43,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0DDC0DE000000000000000A1 /* OddsCore in Frameworks */,
+				0DDC0DE000000000000000A3 /* OddsPresentation in Frameworks */,
 				0DDC0DE000000000000000A2 /* OddsUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -87,6 +89,7 @@
 			name = OddsBoard;
 			packageProductDependencies = (
 				0DDC0DE000000000000000C1 /* OddsCore */,
+				0DDC0DE000000000000000C3 /* OddsPresentation */,
 				0DDC0DE000000000000000C2 /* OddsUI */,
 			);
 			productName = OddsBoard;
@@ -119,6 +122,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				0DDC0DE000000000000000B1 /* XCLocalSwiftPackageReference "Packages/OddsCore" */,
+				0DDC0DE000000000000000B3 /* XCLocalSwiftPackageReference "Packages/OddsPresentation" */,
 				0DDC0DE000000000000000B2 /* XCLocalSwiftPackageReference "Packages/OddsUI" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -391,6 +395,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/OddsUI;
 		};
+		0DDC0DE000000000000000B3 /* XCLocalSwiftPackageReference "Packages/OddsPresentation" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/OddsPresentation;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -401,6 +409,10 @@
 		0DDC0DE000000000000000C2 /* OddsUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = OddsUI;
+		};
+		0DDC0DE000000000000000C3 /* OddsPresentation */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = OddsPresentation;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
