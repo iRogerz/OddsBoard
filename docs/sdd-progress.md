@@ -19,12 +19,14 @@
 - [x] **Phase 2 Spec Interview** — 已問 2 題並取得決議（見下方決策紀錄）
 - [x] **Phase 3a Feature Spec** — `docs/spec.md` v0.1 草案完成
 
+- [x] **開工前置作業** — Xcode 專案 `OddsBoard` 建立完成、Storyboard 移除、手動 UIWindow 啟動可運行
+- [x] **Repo 建立並推送** — `git@github.com:iRogerz/OddsBoard.git`（private）
+
 ## 待辦
 
-- [ ] **⏳ 阻擋中：使用者建立 Xcode 專案**（參數見 `docs/spec.md` §12 開工前置作業）
-- [ ] 確認專案名稱（預設 `OddsBoard`）
 - [ ] **Phase 3b** — 產出 `CLAUDE.md`（專案憲法：技術棧、不可違反的架構規則、目錄結構、agent 行為指令）
 - [ ] 建立 `Packages/OddsCore`、`Packages/OddsUI` 兩個 SPM package 與 SwiftLint 規則
+- [ ] **D1** — Domain 模型、`MockAPIClient`、`actor OddsStore` + 單元測試
 - [ ] **Phase 4** — Context Reset (`/clear`) 後進入 PEV 迴圈實作，實作 agent 只讀 `CLAUDE.md` + `docs/spec.md`
 - [ ] **Phase 5** — Anti-Drift + Hashimoto（每個 bug 留下一條 lint/test）
 - [ ] **Phase 6** — Skill 萃取
@@ -39,6 +41,8 @@
 | 2026-08-05 | **禁 RxSwift，但允許 SnapKit（僅限 `OddsUI`）** | 判準是「是否取代文件指定的技術」而非「有無第三方相依」。RxSwift 會取代 Concurrency/Combine ⇒ 禁；SnapKit 只是 Auto Layout 語法糖 ⇒ 可。原先「零第三方相依」是我方自訂規則、非文件要求，已修正 |
 | 2026-08-05 | **採用本地 SPM package：`OddsCore` + `OddsUI`** | 使用者選擇更低耦合。附帶效益：`OddsCore` 無 UIKit ⇒ 測試可用 `swift test` 命令列跑、免模擬器、約 2 秒 |
 | 2026-08-05 | **Xcode 專案由使用者手動建立** | 手刻 pbxproj 脆弱；已給出建立參數（App template / Storyboard interface / Testing None / iOS 16.0）|
+| 2026-08-05 | **Repo 根目錄設在 `OddsBoard/`，題目 PDF 留在 repo 外層** | 保留 Xcode 既有 git 歷史（不必刪 `.git`），且公司內部題目 PDF 在物理上不可能被誤 push |
+| 2026-08-05 | **GitHub repo 設為 private** | take-home 解答若公開會被永久索引；交件時邀請面試官為 collaborator 或屆時再轉 public |
 | 2026-08-05 | **Concurrency 與 Combine 並用，邊界明確** | 跨執行緒狀態存取 → actor/AsyncStream；ViewModel→View 綁定 → Combine。文件的架構說明文件正好要求說明兩者使用場景 |
 | 2026-08-05 | Deployment target iOS 16.0 | `reconfigureItems` 需 iOS 15+，是「不整頁 reload」的核心 API |
 
