@@ -36,10 +36,19 @@ final class AppDependencies {
         // 兩者若各自產生資料，推播的起始賠率會與 API 回傳的不一致，
         // 畫面收到第一筆推播就會整排跳動。
         let dataset = MockDataset.make()
+        let socket = MockOddsSocket(initialOdds: dataset.odds)
+
+        // API 讀推播來源的現值，而不是回傳開機時的靜態快照 ——
+        // 否則重連後的對帳會把畫面重置回初始賠率，看起來像 bug 而非校正。
+        let api = MockAPIClient(
+            dataset: dataset,
+            liveOdds: { await socket.currentOddsSnapshot() }
+        )
+
         return Session(
             dataset: dataset,
-            api: MockAPIClient(dataset: dataset),
-            socket: MockOddsSocket(initialOdds: dataset.odds),
+            api: api,
+            socket: socket,
             store: OddsStore(),
             cache: FileSnapshotCache.makeDefault()
         )

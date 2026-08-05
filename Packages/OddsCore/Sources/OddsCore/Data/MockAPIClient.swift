@@ -37,9 +37,16 @@ public actor MockAPIClient: MatchAPI {
         }
     }
 
+    /// 取得「此刻」賠率的來源。
+    ///
+    /// 真實伺服器回傳的是當下盤口，不是開機時的快照。注入這個之後，
+    /// 重連後的全量對帳才是真的校正，而不是把畫面重置回初始值。
+    public typealias LiveOddsProvider = @Sendable () async -> [Odds]
+
     private let configuration: Configuration
     private let clock: AppClock
     private let dataset: MockDataset
+    private let liveOdds: LiveOddsProvider?
     private var callCount = 0
 
     /// 注入既有資料集。Composition Root 應走這個入口，讓 API 與推播來源
@@ -47,11 +54,13 @@ public actor MockAPIClient: MatchAPI {
     public init(
         dataset: MockDataset,
         configuration: Configuration = Configuration(),
-        clock: AppClock = SystemClock()
+        clock: AppClock = SystemClock(),
+        liveOdds: LiveOddsProvider? = nil
     ) {
         self.dataset = dataset
         self.configuration = configuration
         self.clock = clock
+        self.liveOdds = liveOdds
     }
 
     /// 自行產生資料集的便利建構子，供測試使用。
@@ -84,6 +93,11 @@ public actor MockAPIClient: MatchAPI {
 
     public func fetchOdds() async throws -> [Odds] {
         try await simulateRequest()
+        // 有現值來源就回傳現值；沒有（例如測試）則退回初始資料集。
+        if let liveOdds {
+            let odds = await liveOdds()
+            if !odds.isEmpty { return odds }
+        }
         return dataset.odds
     }
 

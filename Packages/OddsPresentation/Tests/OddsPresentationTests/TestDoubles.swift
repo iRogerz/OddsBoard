@@ -130,3 +130,41 @@ final class FixedClock: AppClock, @unchecked Sendable {
     var monotonicNanos: UInt64 { 1_000_000 }
     func sleep(for duration: Duration) async throws { await Task.yield() }
 }
+
+/// 可在測試中途改變行為的 API 替身。
+///
+/// `FakeMatchAPI` 是 struct、以值傳入 ViewModel，注入後就無法再調整；
+/// 要測「首次載入成功、之後的對帳失敗」這種情境必須有可變狀態。
+actor ControllableMatchAPI: MatchAPI {
+
+    private var matches: [Match]
+    private var odds: [Odds]
+    private var error: MatchAPIError?
+
+    private(set) var fetchOddsCallCount = 0
+
+    init(matches: [Match], odds: [Odds], error: MatchAPIError? = nil) {
+        self.matches = matches
+        self.odds = odds
+        self.error = error
+    }
+
+    func setError(_ error: MatchAPIError?) {
+        self.error = error
+    }
+
+    func setOdds(_ odds: [Odds]) {
+        self.odds = odds
+    }
+
+    func fetchMatches() async throws -> [Match] {
+        if let error { throw error }
+        return matches
+    }
+
+    func fetchOdds() async throws -> [Odds] {
+        fetchOddsCallCount += 1
+        if let error { throw error }
+        return odds
+    }
+}

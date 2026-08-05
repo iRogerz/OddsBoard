@@ -138,4 +138,27 @@ final class MatchListViewControllerTests: XCTestCase {
             "CADisplayLink 強引用 target 會造成 VC 永久洩漏，必須透過弱引用代理"
         )
     }
+
+    /// 曾經的 bug：`viewDidDisappear` 無條件中斷推播，而 push 詳情頁也會
+    /// 觸發它 —— 詳情頁的賠率與走勢圖在進入的瞬間就凍結了。
+    func test_被詳情頁覆蓋時不中斷推播() async {
+        let (viewController, viewModel) = makeSubject(matchCount: 20)
+        let navigationController = UINavigationController(rootViewController: viewController)
+        viewController.loadViewIfNeeded()
+        _ = await waitUntilLoaded(viewModel)
+
+        viewController.viewWillAppear(false)
+        // push 一個畫面覆蓋列表：列表沒有離開導覽堆疊。
+        navigationController.pushViewController(UIViewController(), animated: false)
+        viewController.viewDidDisappear(false)
+
+        XCTAssertFalse(
+            viewController.isDisplayLinkRunningForTesting,
+            "看不見的畫面不該繼續做 UI 工作"
+        )
+        XCTAssertFalse(
+            viewController.isMovingFromParent,
+            "列表仍在堆疊中，推播不該被中斷 —— 否則詳情頁會完全靜止"
+        )
+    }
 }

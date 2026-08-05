@@ -193,4 +193,38 @@ final class MockAPIClientTests: XCTestCase {
 
         XCTAssertEqual(matches.count, 100)
     }
+
+    // MARK: - 現值來源（重連對帳用）
+
+    /// 真實伺服器回傳的是此刻的盤口。若 mock 永遠回傳開機時的初始值，
+    /// 重連對帳就變成「重置到開機值」—— demo 時看起來是無來由的大跳動。
+    func test_有現值來源時fetchOdds回傳現值而非初始資料() async throws {
+        let live = [
+            Odds(matchID: 1001, teamAOdds: 7.77, teamBOdds: 8.88)
+        ]
+        let client = MockAPIClient(
+            dataset: MockDataset.make(referenceDate: referenceDate),
+            configuration: MockAPIClient.Configuration(),
+            clock: ImmediateClock(),
+            liveOdds: { live }
+        )
+
+        let odds = try await client.fetchOdds()
+
+        XCTAssertEqual(odds, live)
+    }
+
+    func test_現值來源為空時退回初始資料() async throws {
+        let dataset = MockDataset.make(referenceDate: referenceDate)
+        let client = MockAPIClient(
+            dataset: dataset,
+            configuration: MockAPIClient.Configuration(),
+            clock: ImmediateClock(),
+            liveOdds: { [] }
+        )
+
+        let odds = try await client.fetchOdds()
+
+        XCTAssertEqual(odds, dataset.odds)
+    }
 }

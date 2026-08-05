@@ -32,7 +32,8 @@ public final class MatchListViewController: UIViewController {
     /// module 內可見（非 private）：Debug 面板拆在同模組的另一個檔案裡。
     let viewModel: MatchListViewModel
     private var cancellables: Set<AnyCancellable> = []
-    private var displayLink: CADisplayLink?
+    /// module 內可見（非 private）：由 MatchListViewController+Testing 讀取。
+    var displayLink: CADisplayLink?
     private var displayLinkProxy: DisplayLinkProxy?
     private var lastFlushTimestamp: CFTimeInterval = 0
     private var isFlushing = false
@@ -51,7 +52,8 @@ public final class MatchListViewController: UIViewController {
 
     private lazy var dataSource = makeDataSource()
 
-    private let statusLabel: UILabel = {
+    /// module 內可見（非 private）：由 MatchListViewController+Testing 讀取。
+    let statusLabel: UILabel = {
         let label = UILabel()
         label.font = .preferredFont(forTextStyle: .caption1)
         label.textAlignment = .center
@@ -134,10 +136,14 @@ public final class MatchListViewController: UIViewController {
 
     public override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        // 停掉 UI 節拍**並且**中斷推播來源。
-        // 只停節拍的話，推播仍以每秒 10 筆持續流入並累計統計數字，
-        // 換成真實 WebSocket 就是背景維持連線與耗電。
+        // 節拍一律停：看不見的畫面不該做任何 UI 工作。
         stopDisplayLink()
+
+        // 但推播只在**真正離開列表**時才中斷。
+        // push 詳情頁也會觸發 viewDidDisappear，若在此無條件中斷，
+        // 詳情頁的賠率與走勢圖會在進入的瞬間凍結 —— 一個標榜即時的畫面
+        // 實際上是靜態的。
+        guard isMovingFromParent || isBeingDismissed else { return }
         Task { [viewModel] in await viewModel.pauseStreaming() }
     }
 
@@ -228,12 +234,6 @@ public final class MatchListViewController: UIViewController {
 
         displayLinkProxy = proxy
         displayLink = link
-    }
-
-    /// 測試用：讓斷言能直接檢查節拍是否在運轉，而不是間接觀察 uiFlushes ——
-    /// view 未加入 window 時 display link 本來就不會觸發，間接觀察會恆真。
-    var isDisplayLinkRunningForTesting: Bool {
-        displayLink != nil
     }
 
     private func stopDisplayLink() {

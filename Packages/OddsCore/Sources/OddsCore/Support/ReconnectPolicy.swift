@@ -46,7 +46,9 @@ public struct ReconnectPolicy: Sendable {
             in: (1 - jitterFactor)...(1 + jitterFactor),
             using: &generator
         )
-        let nanos = Double(base.components.seconds) * 1_000_000_000 * factor
+        // 以總奈秒數運算，而非只取 `components.seconds`：
+        // 後者會讓任何小於一秒的設定值被無聲丟棄。
+        let nanos = Double(base.totalNanoseconds) * factor
         return .nanoseconds(Int64(nanos))
     }
 
@@ -54,15 +56,33 @@ public struct ReconnectPolicy: Sendable {
     public func unjitteredDelay(forAttempt attempt: Int) -> Duration {
         guard attempt > 0 else { return baseDelay }
 
-        let exponent = min(attempt - 1, 30)
-        let multiplier = Int64(1) << Int64(exponent)
-        let seconds = baseDelay.components.seconds
+        let maxNanos = maxDelay.totalNanoseconds
+        var nanos = baseNanos
 
-        // 先夾住再相乘，避免長時間離線後指數爆掉造成溢位。
-        guard seconds > 0, multiplier <= Int64.max / max(seconds, 1) else {
-            return maxDelay
+        // 逐次倍增並在每一步檢查上限，長時間離線也不會溢位。
+        for _ in 0..<(attempt - 1) {
+            if nanos >= maxNanos { return maxDelay }
+            let (doubled, overflow) = nanos.multipliedReportingOverflow(by: 2)
+            if overflow { return maxDelay }
+            nanos = doubled
         }
-        let scaled = Duration.seconds(seconds * multiplier)
-        return scaled > maxDelay ? maxDelay : scaled
+        return nanos >= maxNanos ? maxDelay : .nanoseconds(nanos)
+    }
+
+    private var baseNanos: Int64 {
+        max(1, baseDelay.totalNanoseconds)
+    }
+}
+
+extension Duration {
+
+    /// 總奈秒數。`components.seconds` 會丟掉小數部分，
+    /// 任何以毫秒為單位設定的 `Duration` 都會因此被當成 0。
+    var totalNanoseconds: Int64 {
+        let fromSeconds = components.seconds.multipliedReportingOverflow(by: 1_000_000_000)
+        guard !fromSeconds.overflow else { return .max }
+        let fromAttoseconds = components.attoseconds / 1_000_000_000
+        let total = fromSeconds.partialValue.addingReportingOverflow(fromAttoseconds)
+        return total.overflow ? .max : total.partialValue
     }
 }

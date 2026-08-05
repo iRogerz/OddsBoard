@@ -158,6 +158,15 @@ public actor MockOddsSocket: OddsStreaming {
         lastKnown[matchID]
     }
 
+    /// 目前所有場次的賠率。
+    ///
+    /// 供 mock 的 `GET /odds` 取用：真實伺服器回傳的是「此刻的盤口」，
+    /// 若 mock API 永遠回傳開機時的初始值，重連對帳就會變成「重置到開機值」，
+    /// demo 時看起來是一次無來由的大幅跳動，而不是校正。
+    public func currentOddsSnapshot() -> [Odds] {
+        matchIDs.compactMap { lastKnown[$0] }
+    }
+
     // MARK: - Private
 
     private func runLoop() async {

@@ -41,6 +41,10 @@ public final class MatchListViewModel: ObservableObject {
     /// 快取已超過新鮮度門檻。畫面必須明確標示，不能讓使用者誤以為是現值。
     @Published public private(set) var isShowingStaleData = false
 
+    /// 重連後的全量對帳失敗。與 `connectionState` 分開表達 ——
+    /// 對帳走的是 REST，推播連線可能完全正常。
+    @Published public private(set) var resyncFailed = false
+
     // MARK: - 相依
 
     private let api: MatchAPI
@@ -126,7 +130,11 @@ public final class MatchListViewModel: ObservableObject {
             )
 
             orderedMatchIDs = sorted.map(\.id)
+            // 兩個旗標都要清。只清 `isShowingCachedData` 的話，過期橫幅會在
+            // 即時資料抵達後仍掛在畫面上 —— 這條警示本來是要防止使用者把舊
+            // 賠率當現值，留著反而讓人把即時賠率當成過期資料，適得其反。
             isShowingCachedData = false
+            isShowingStaleData = false
             loadState = .loaded
 
             await saveSnapshot()
@@ -256,21 +264,18 @@ public final class MatchListViewModel: ObservableObject {
             let odds = try await api.fetchOdds()
             await store.replaceAll(with: odds)
 
-            let snapshot = await store.snapshot()
-            for matchID in orderedMatchIDs {
-                guard let match = matchesByID[matchID] else { continue }
-                rowsByID[matchID] = MatchRow(
-                    match: match,
-                    odds: snapshot.odds[matchID],
-                    change: .unchanged
-                )
-            }
-            // 對帳是校正而非賠率跳動，因此不標記漲跌，也不觸發整頁閃爍。
-            objectWillChange.send()
+            // **校正後必須把所有場次送進合併器。**
+            // 只更新 store 與內部字典的話，可見的 cell 從頭到尾不會被
+            // reconfigure，使用者仍看著斷線前的舊值 —— 對帳等於沒有抵達畫面。
+            // 走一般的 flush 路徑，畫面更新只有這一條路，不需要第二套機制。
+            coalescer.ingest(orderedMatchIDs)
+
+            resyncFailed = false
         } catch {
-            // 對帳失敗不該讓畫面壞掉：既有資料仍可顯示，
-            // 下次重連或使用者重新進入畫面時會再試一次。
-            connectionState = .failed
+            // 對帳失敗只代表「校正沒成功」，不代表推播斷了 ——
+            // 此時連線其實是好的，賠率仍在跳。把它寫成 `.failed` 會讓畫面
+            // 顯示「無法連線」卻同時看到數字在動，自相矛盾。
+            resyncFailed = true
         }
     }
 
@@ -346,7 +351,10 @@ public final class MatchListViewModel: ObservableObject {
             connectionState = state
 
             if wasReconnecting, state == .connected {
-                await resynchronize()
+                // 獨立 Task：對帳含一次 REST 往返（200~600ms），若在此 await，
+                // 事件消費迴圈整段停擺，高頻推播下 AsyncStream 的緩衝區會溢位
+                // 而丟掉事件 —— 包含可能夾在其中的連線狀態事件。
+                Task { [weak self] in await self?.resynchronize() }
             }
 
         case .updates(let updates):
