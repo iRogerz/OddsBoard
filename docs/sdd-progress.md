@@ -3,7 +3,7 @@
 > ⚠️ 請勿刪除。這是跨對話的記憶檔。每次開新 session 先讀這份。
 
 **專案**：OpenNet iOS Take-Home — 即時賽事賠率系統
-**最後更新**：2026-08-05
+**最後更新**：2026-08-06
 
 ---
 
@@ -111,7 +111,7 @@
 | 2026-08-05 | **採用本地 SPM package：`OddsCore` + `OddsUI`** | 使用者選擇更低耦合。附帶效益：`OddsCore` 無 UIKit ⇒ 測試可用 `swift test` 命令列跑、免模擬器、約 2 秒 |
 | 2026-08-05 | **Xcode 專案由使用者手動建立** | 手刻 pbxproj 脆弱；已給出建立參數（App template / Storyboard interface / Testing None / iOS 16.0）|
 | 2026-08-05 | **Repo 根目錄設在 `OddsBoard/`，題目 PDF 留在 repo 外層** | 保留 Xcode 既有 git 歷史（不必刪 `.git`），且公司內部題目 PDF 在物理上不可能被誤 push |
-| 2026-08-05 | **GitHub repo 設為 private** | take-home 解答若公開會被永久索引；交件時邀請面試官為 collaborator 或屆時再轉 public |
+| 2026-08-05 | **GitHub repo 最終設為 public**（使用者確認）| 初期設 private，考量 take-home 解答公開後會被永久索引；後續改為 public 讓交件只需貼連結、面試官不必接受邀請。轉換前已確認 repo 內無題目 PDF、無任何金鑰 |
 | 2026-08-05 | **驗證分工**：agent 不跑 build 與模擬器，由使用者自行驗證 | 使用者指示。agent 仍會跑不需編譯的檢查（SwiftLint、pbxproj 解析）|
 | 2026-08-05 | **`OddsCore` 宣告支援 macOS** | 不是為了跑在 Mac 上，而是讓「Domain 不得 import UIKit」成為編譯期保證，並讓測試免模擬器 |
 | 2026-08-05 | **失敗注入改為確定性模式而非機率** | 題目寫「失敗率」，但機率式失敗會造成偶發紅燈，而偶發紅燈最後一定會被忽略。改用 `.never` / `.always` / `.firstCalls(n)` |
