@@ -9,7 +9,7 @@
 
 ## 目前階段
 
-**Phase 4 — PEV 迴圈實作中。D1–D4 完成並驗證，待人工確認 D4 畫面後進 D5**
+**Phase 4 完成。D1–D4 全部實作、驗證、並通過兩輪 code review 修正。下一步是 D5（交件文件與驗證）。**
 
 ---
 
@@ -27,20 +27,37 @@
 | D2 `MockOddsSocket` + `UpdateCoalescer` + `MatchListViewModel` | ✅ 已驗證 |
 | D3 `UITableView` + diffable + 漲跌閃爍 | ✅ 已驗證 |
 | Code review 修正輪（6 項）| ✅ 已驗證 |
-| D4 快取 + 重連對帳 + 詳情頁 + Debug HUD | ⏳ 待人工確認畫面 |
+| D4 快取 + 重連對帳 + 詳情頁 + Debug HUD | ✅ 已驗證 |
+| D4 code review 修正（7 項）| ✅ 已驗證 |
 | D5 `ARCHITECTURE.md` + Instruments + 錄影 | ⬜ |
 | Phase 6 Skill 萃取 | ⬜ |
 
-**測試數**：`OddsCore` 68 + `OddsPresentation` 29 + `OddsBoardTests` 16 = **113**
+**測試數**：`OddsCore` 73 + `OddsPresentation` 32 + `OddsBoardTests` 19 = **124**
+
+**Repo**：https://github.com/iRogerz/OddsBoard （**public**，交件直接貼連結即可）
 
 ---
 
-## 待辦
+## 待辦（D5：交件前最後一段）
 
-- [ ] **人工驗證 D4**：Xcode build + ⌘U；肉眼確認詳情頁、長按開 Debug 面板、
-      加壓到 1000 筆/秒仍順暢、模擬斷線可看到重連與對帳、pop 回列表無載入過程
-- [ ] **D5** — `ARCHITECTURE.md`（含下方「刻意保留項」）、Instruments 驗證、操作錄影
+- [ ] **`ARCHITECTURE.md`** — 考題點名要回答的三題：
+      Swift Concurrency / Combine 使用場景、如何確保 thread-safe、
+      UI 與 ViewModel 綁定方式。**外加「已知限制與未完成部分」**
+      （考題最後明說會據此評估，見下方「刻意保留項」）
+- [ ] **README 交件版** — 目前偏開發者視角，需補上「這個專案在解什麼問題」的開場
+- [ ] **Instruments 驗證** — memory retain、滾動流暢度（需人工操作，可先寫檢查清單）
+- [ ] **操作錄影** — 依腳本走一遍。錄影本身也是驗證：凍結、不閃這類 bug 會自己跳出來
+- [ ] 建議交件前由使用者跑一次 `/code-review ultra`（多 agent 深度審查，僅使用者可觸發）
 - [ ] **Phase 6** — 萃取可重用的 SKILL.md
+
+### 錄影腳本要帶到的考點
+
+1. 列表依開賽時間升序、100 場比賽
+2. 賠率跳動時**只有變動的那一格閃綠/閃紅**，整頁不重繪
+3. 長按開 Debug 面板 → 加壓到 1000 筆/秒，滾動仍順暢
+4. HUD 顯示 reloadData 次數為 0
+5. 模擬斷線 → 狀態列顯示重試次數 → 重連後全量對帳
+6. 點進詳情頁（賠率與走勢圖持續更新）→ 返回列表**無載入過程**
 
 ### 刻意保留、不修的項目（D5 寫進 ARCHITECTURE.md 的「已知限制」）
 
@@ -50,6 +67,25 @@
   `histories`。本專案比賽集合固定，不會觸發。
 
 ---
+
+## 兩輪 code review 的總結（值得寫進 ARCHITECTURE.md）
+
+兩輪各找出 6 項與 7 項問題。**最值得記的是「哪一類 bug 靠什麼方式才抓得到」**：
+
+| bug | 靠什麼發現 |
+|---|---|
+| 漲跌閃爍完全不生效 | **跑模擬器**。讀程式碼三次都沒抓到，因為動畫確實被加到 layer 上、`animationKeys()` 有值、無任何警告 |
+| Debug HUD 的丟棄數灌水 | **盯著畫面上的數字**。型別完全合法 |
+| 對帳結果不會抵達畫面 | code review |
+| 詳情頁進入即凍結 | code review |
+| `CADisplayLink` 保留循環 | code review |
+
+前兩個是最嚴重也最難察覺的，而它們**都不是靠讀程式碼找到的**，而且當時單元測試全是綠的 ——
+因為測試驗的是 ViewModel 內部狀態，bug 在「狀態到畫面」那一段。
+
+**教訓**：這個專案的弱點不是「審得不夠多」，是「驗得不夠真」。
+後續補上的 `MatchCellTests`（斷言動畫 `fromValue` 的 alpha）與 `MatchListStatusTests`
+（斷言狀態列文字）就是針對這一類。
 
 ## D4 的關鍵設計
 
