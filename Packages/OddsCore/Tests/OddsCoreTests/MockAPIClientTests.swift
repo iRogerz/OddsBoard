@@ -12,9 +12,9 @@ final class MockAPIClientTests: XCTestCase {
         let clock = ImmediateClock()
         var configuration = MockAPIClient.Configuration()
         configuration.failureMode = failureMode
-        configuration.seed = seed
         let client = MockAPIClient(
             configuration: configuration,
+            datasetConfiguration: MockDataset.Configuration(seed: seed),
             clock: clock,
             referenceDate: referenceDate
         )
@@ -117,6 +117,26 @@ final class MockAPIClientTests: XCTestCase {
         let secondMatches = try await second.fetchMatches()
 
         XCTAssertNotEqual(firstMatches, secondMatches)
+    }
+
+    /// 曾經的 bug：便利建構子以 `configuration.seed` 覆寫 `datasetConfiguration.seed`，
+    /// 呼叫端明確指定的資料集種子被靜默丟棄。
+    func test_資料集種子不會被延遲種子覆寫() async throws {
+        let clock = ImmediateClock()
+        let client = MockAPIClient(
+            configuration: MockAPIClient.Configuration(seed: 111),
+            datasetConfiguration: MockDataset.Configuration(seed: 999),
+            clock: clock,
+            referenceDate: referenceDate
+        )
+        let expected = MockDataset.make(
+            configuration: MockDataset.Configuration(seed: 999),
+            referenceDate: referenceDate
+        )
+
+        let matches = try await client.fetchMatches()
+
+        XCTAssertEqual(matches, expected.matches, "呼叫端指定的資料集種子必須被採用")
     }
 
     // MARK: - 網路延遲模擬（spec §4 FR-1.3）

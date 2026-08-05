@@ -20,6 +20,8 @@ public actor MockAPIClient: MatchAPI {
 
     public struct Configuration: Sendable {
 
+        /// 網路延遲抖動的種子。**與資料集的種子無關** ——
+        /// 資料集由 `MockDataset.Configuration` 獨立控制。
         public var seed: UInt64
         public var latencyRange: ClosedRange<Int>
         public var failureMode: FailureMode
@@ -53,14 +55,16 @@ public actor MockAPIClient: MatchAPI {
     }
 
     /// 自行產生資料集的便利建構子，供測試使用。
+    ///
+    /// 兩個 configuration 的 `seed` 各自獨立：前者只影響網路延遲抖動，
+    /// 後者決定資料集內容。曾經在這裡以 `configuration.seed` 覆寫
+    /// `datasetConfiguration.seed`，導致呼叫端明確指定的資料集種子被靜默丟棄。
     public init(
         configuration: Configuration = Configuration(),
         datasetConfiguration: MockDataset.Configuration = MockDataset.Configuration(),
         clock: AppClock = SystemClock(),
         referenceDate: Date = Date()
     ) {
-        var datasetConfiguration = datasetConfiguration
-        datasetConfiguration.seed = configuration.seed
         self.init(
             dataset: MockDataset.make(
                 configuration: datasetConfiguration,

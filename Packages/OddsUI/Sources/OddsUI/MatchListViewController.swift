@@ -32,7 +32,9 @@ public final class MatchListViewController: UIViewController {
     private let viewModel: MatchListViewModel
     private var cancellables: Set<AnyCancellable> = []
     private var displayLink: CADisplayLink?
+    private var displayLinkProxy: DisplayLinkProxy?
     private var lastFlushTimestamp: CFTimeInterval = 0
+    private var isFlushing = false
 
     private lazy var tableView: UITableView = {
         let tableView = UITableView(frame: .zero, style: .plain)
@@ -82,19 +84,25 @@ public final class MatchListViewController: UIViewController {
         setUpLayout()
         bind()
 
-        Task { await viewModel.start() }
+        // 只捕捉 viewModel，不捕捉 self。
+        // 寫成 `Task { await viewModel.start() }` 會因為存取 self 的屬性而
+        // 隱式強引用整個 view controller，在載入完成前它都無法被釋放。
+        Task { [viewModel] in await viewModel.start() }
     }
 
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         startDisplayLink()
+        Task { [viewModel] in await viewModel.resumeStreaming() }
     }
 
     public override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        // 畫面離開時停掉節拍。推播仍會寫進 store（回來時資料是最新的），
-        // 但不再產生任何 UI 工作。
+        // 停掉 UI 節拍**並且**中斷推播來源。
+        // 只停節拍的話，推播仍以每秒 10 筆持續流入並累計統計數字，
+        // 換成真實 WebSocket 就是背景維持連線與耗電。
         stopDisplayLink()
+        Task { [viewModel] in await viewModel.pauseStreaming() }
     }
 
     // MARK: - 綁定
@@ -165,22 +173,47 @@ public final class MatchListViewController: UIViewController {
     private func startDisplayLink() {
         guard displayLink == nil else { return }
 
-        let link = CADisplayLink(target: self, selector: #selector(handleDisplayLink(_:)))
+        // 透過弱引用代理，避免 CADisplayLink 強引用住本 VC（見 DisplayLinkProxy）。
+        let proxy = DisplayLinkProxy(target: self) { viewController in
+            viewController.handleDisplayLink()
+        }
+        let link = CADisplayLink(
+            target: proxy,
+            selector: #selector(DisplayLinkProxy.handleDisplayLink(_:))
+        )
         link.add(to: .main, forMode: .common)
+
+        displayLinkProxy = proxy
         displayLink = link
+    }
+
+    /// 測試用：讓斷言能直接檢查節拍是否在運轉，而不是間接觀察 uiFlushes ——
+    /// view 未加入 window 時 display link 本來就不會觸發，間接觀察會恆真。
+    var isDisplayLinkRunningForTesting: Bool {
+        displayLink != nil
     }
 
     private func stopDisplayLink() {
         displayLink?.invalidate()
         displayLink = nil
+        displayLinkProxy = nil
     }
 
-    @objc
-    private func handleDisplayLink(_ link: CADisplayLink) {
+    private func handleDisplayLink() {
+        guard let link = displayLink else { return }
         guard link.timestamp - lastFlushTimestamp >= Self.flushInterval else { return }
         lastFlushTimestamp = link.timestamp
 
+        // 同一時間只允許一輪 flush。
+        //
+        // 每個節拍各自開 Task，而 flushPendingUpdates 內有多個 await 點；
+        // 若前後兩輪交錯，前一輪的 clearChanges 會抹掉後一輪剛讀到的漲跌標記，
+        // 造成該次變動完全不閃。負載越高、await 越久，漏閃比例越明顯。
+        guard !isFlushing else { return }
+        isFlushing = true
+
         Task { @MainActor [weak self] in
+            defer { self?.isFlushing = false }
             await self?.flushPendingUpdates()
         }
     }

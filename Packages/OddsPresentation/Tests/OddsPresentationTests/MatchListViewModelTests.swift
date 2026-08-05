@@ -263,6 +263,86 @@ final class MatchListViewModelTests: XCTestCase {
         )
     }
 
+    // MARK: - 生命週期（code review 回歸測試）
+
+    /// 只擋 `.loading` 的守衛會讓第二次呼叫再建立一個 `socket.events` 迭代器，
+    /// 而 AsyncStream 只支援單一消費者，重疊期間會直接觸發執行期錯誤。
+    func test_載入完成後重複呼叫start不會重新連線() async {
+        let (viewModel, socket) = makeViewModel()
+
+        await viewModel.start()
+        _ = await waitUntil { await socket.connectCallCount == 1 }
+        await viewModel.start()
+        await viewModel.start()
+
+        let connectCount = await socket.connectCallCount
+        XCTAssertEqual(connectCount, 1, "重複 start 會產生第二個 AsyncStream 消費者")
+    }
+
+    func test_載入失敗後仍可重試() async {
+        var api = FakeMatchAPI()
+        api.error = .simulatedNetworkFailure
+        let socket = FakeOddsSocket()
+        let viewModel = MatchListViewModel(
+            api: api,
+            store: OddsStore(),
+            socket: socket,
+            clock: SystemClock()
+        )
+
+        await viewModel.start()
+        guard case .failed = viewModel.loadState else {
+            XCTFail("應為 failed")
+            return
+        }
+
+        // 失敗後守衛不該把重試也一起擋掉。
+        await viewModel.start()
+        guard case .failed = viewModel.loadState else {
+            XCTFail("重試應該真的重跑載入流程")
+            return
+        }
+    }
+
+    /// 離開畫面若不中斷推播，換成真實 WebSocket 就是背景維持連線與耗電。
+    func test_暫停後中斷推播來源() async {
+        let (viewModel, socket) = makeViewModel()
+        await viewModel.start()
+
+        await viewModel.pauseStreaming()
+
+        let disconnectCount = await socket.disconnectCallCount
+        XCTAssertEqual(disconnectCount, 1)
+    }
+
+    func test_恢復後重新連線但不重建消費者() async {
+        let (viewModel, socket) = makeViewModel()
+        await viewModel.start()
+        _ = await waitUntil { await socket.connectCallCount == 1 }
+
+        await viewModel.pauseStreaming()
+        await viewModel.resumeStreaming()
+
+        let connectCount = await socket.connectCallCount
+        XCTAssertEqual(connectCount, 2, "恢復時應重新連線")
+
+        // 消費者仍在，事件照樣收得到。
+        socket.emit(.updates([
+            Fixture.update(matchID: 1001, teamA: 2.50, teamB: 1.60, sequence: 1)
+        ]))
+        let received = await waitUntil { viewModel.hasPendingUpdates }
+        XCTAssertTrue(received, "恢復後事件消費者必須仍然有效")
+    }
+
+    func test_尚未載入完成時恢復不會連線() async {
+        let (viewModel, socket) = makeViewModel()
+
+        await viewModel.resumeStreaming()
+
+        let connectCount = await socket.connectCallCount
+        XCTAssertEqual(connectCount, 0, "資料都還沒載入就連線，收到的推播會無處可套用")
+    }
+
     // MARK: - Debug
 
     func test_可調整推播頻率() async {

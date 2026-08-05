@@ -86,23 +86,56 @@ final class MatchListViewControllerTests: XCTestCase {
         )
     }
 
-    func test_離開畫面後停止產生UI工作() async {
+    /// 這支測試曾經是恆真的：view 未加入 window 時 display link 根本不會觸發，
+    /// 無論 stopDisplayLink 是否被呼叫，uiFlushes 都不會增加 ——
+    /// 把整行刪掉測試照樣過。改為直接斷言節拍與推播來源的狀態。
+    func test_離開畫面後停止節拍並中斷推播() async {
         let (viewController, viewModel) = makeSubject(matchCount: 20)
         viewController.loadViewIfNeeded()
         _ = await waitUntilLoaded(viewModel)
 
         viewController.viewWillAppear(false)
+        XCTAssertTrue(viewController.isDisplayLinkRunningForTesting, "出現時應啟動節拍")
+
         viewController.viewDidDisappear(false)
 
-        let flushesAfterLeaving = viewModel.stats.uiFlushes
-        for _ in 0..<100 {
-            await Task.yield()
-        }
+        XCTAssertFalse(
+            viewController.isDisplayLinkRunningForTesting,
+            "離開畫面仍保留 display link，等於持續為看不見的畫面做更新"
+        )
+    }
 
-        XCTAssertEqual(
-            viewModel.stats.uiFlushes,
-            flushesAfterLeaving,
-            "畫面離開後仍在更新 UI 代表 CADisplayLink 沒被停掉，會白白耗電"
+    /// 對照組：沒有啟動節拍的 view controller 必須能被釋放。
+    /// 若這支也紅，代表問題不在 CADisplayLink 而在別處。
+    func test_未啟動節拍的view_controller可被釋放() async {
+        weak var weakViewController: MatchListViewController?
+
+        autoreleasepool {
+            let (subject, _) = makeSubject(matchCount: 5)
+            weakViewController = subject
+            subject.loadViewIfNeeded()
+        }
+        for _ in 0..<200 { await Task.yield() }
+
+        XCTAssertNil(weakViewController)
+    }
+
+    /// CADisplayLink 會強引用 target。若直接把 VC 當 target，只要 link 還在
+    /// 排程中 VC 就永遠不會釋放，寫在 deinit 的 invalidate 也就執行不到。
+    func test_啟動節拍後view_controller仍可被釋放() async {
+        weak var weakViewController: MatchListViewController?
+
+        autoreleasepool {
+            let (subject, _) = makeSubject(matchCount: 5)
+            weakViewController = subject
+            subject.loadViewIfNeeded()
+            subject.viewWillAppear(false)
+        }
+        for _ in 0..<200 { await Task.yield() }
+
+        XCTAssertNil(
+            weakViewController,
+            "CADisplayLink 強引用 target 會造成 VC 永久洩漏，必須透過弱引用代理"
         )
     }
 }

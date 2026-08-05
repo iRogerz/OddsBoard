@@ -65,8 +65,19 @@ public final class MatchListViewModel: ObservableObject {
 
     // MARK: - 生命週期
 
+    /// 載入資料並開始接收推播。
+    ///
+    /// 已在載入中或已載入完成時直接返回。這個守衛必須擋掉「已完成」的情況 ——
+    /// 只擋 `.loading` 的話，第二次呼叫會再建立一個 `socket.events` 的迭代器，
+    /// 而 `AsyncStream` 只支援單一消費者，重疊期間會直接觸發執行期錯誤。
+    /// 載入失敗後仍允許重試。
     public func start() async {
-        guard loadState != .loading else { return }
+        switch loadState {
+        case .loading, .loaded:
+            return
+        case .idle, .failed:
+            break
+        }
         loadState = .loading
 
         do {
@@ -101,12 +112,35 @@ public final class MatchListViewModel: ObservableObject {
             orderedMatchIDs = sorted.map(\.id)
             loadState = .loaded
 
-            startStreaming()
+            startStreamingIfNeeded()
+            await socket.connect()
         } catch {
             loadState = .failed(String(describing: error))
         }
     }
 
+    /// 畫面離開時呼叫：中斷推播來源，但保留事件消費者。
+    ///
+    /// 不做這件事的話，使用者離開列表後推播仍以每秒 10 筆持續流入 ——
+    /// 換成真實 WebSocket 就是背景維持連線與耗電，統計數字也會把離開期間
+    /// 的推播一併算進去，讓 Debug HUD 顯示的更新率失真。
+    public func pauseStreaming() async {
+        await socket.disconnect()
+    }
+
+    /// 畫面回到前景時呼叫：重新連上推播來源。
+    ///
+    /// 刻意**不**重新建立事件消費者 —— 消費者在整個 ViewModel 生命週期內
+    /// 只建立一次，避免對同一個 `AsyncStream` 產生第二個迭代器。
+    ///
+    /// - Note: 離開期間的推播是真的遺失了。D4 的重連對帳（spec §FR-6.4）
+    ///   會在這裡補上「重抓 `GET /odds` 做一次全量校正」。
+    public func resumeStreaming() async {
+        guard loadState == .loaded else { return }
+        await socket.connect()
+    }
+
+    /// 完整拆除。ViewModel 不再被使用時呼叫。
     public func stop() {
         streamTask?.cancel()
         streamTask = nil
@@ -186,8 +220,13 @@ public final class MatchListViewModel: ObservableObject {
 
     // MARK: - Private
 
-    private func startStreaming() {
-        streamTask?.cancel()
+    /// 建立事件消費者，並確保整個 ViewModel 生命週期內**只建立一次**。
+    ///
+    /// `AsyncStream` 只支援單一消費者：同時存在兩個迭代器會直接觸發執行期
+    /// 錯誤。因此連線的開關由 `socket.connect()` / `disconnect()` 負責，
+    /// 消費者本身從頭到尾都在。
+    private func startStreamingIfNeeded() {
+        guard streamTask == nil else { return }
 
         let events = socket.events
         streamTask = Task { [weak self] in
@@ -196,9 +235,6 @@ public final class MatchListViewModel: ObservableObject {
                 await self.handle(event)
             }
         }
-
-        let socket = self.socket
-        Task { await socket.connect() }
     }
 
     private func handle(_ event: OddsStreamEvent) async {

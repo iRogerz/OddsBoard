@@ -43,10 +43,21 @@
 - [x] **D3** — `MatchCell`、`MatchListViewController`（diffable + CADisplayLink 節拍 +
       可見範圍交集 + 漲跌閃爍）、`MockDataset` 抽離、`OddsBoardTests` 目標與 11 個 UI 測試
 
+- [x] **D3 已驗證** — 模擬器實測閃爍正常；swift test 69 + OddsBoardTests 14 全過
+- [x] **Code review 修正輪** — 6 項發現已修（見下方決策紀錄）
+
 ## 待辦
 
-- [ ] **人工驗證 D3**：Xcode build + ⌘U（`OddsBoardTests` 需綠）；肉眼確認閃爍
-- [ ] 建議跑一次 `/code-review`（D3 是正確性風險最集中的一段）
+- [ ] **人工驗證修正輪**：Xcode build + ⌘U
+- [ ] **D4** — 快取、重連 + 對帳、詳情頁、Debug HUD
+- [ ] **D5** — `ARCHITECTURE.md`、Instruments 驗證、錄影
+
+### Code review 未處理項（刻意保留，D5 寫進 ARCHITECTURE.md 的「已知限制」）
+
+- `MockOddsSocket` 的連線狀態事件與賠率資料共用會丟棄的 `bufferingNewest(256)`
+  緩衝，極高負載下狀態事件可能被丟掉。正解是控制事件走獨立不丟棄的通道。
+- `OddsStore.replaceAll` 未清掉不在新資料中的比賽的 `acceptedSequence` 與
+  `histories`。本專案比賽集合固定，不會觸發。
 - [ ] **D3** — `MatchListViewController` + diffable data source + 更新合併器 + 漲跌閃爍
 - [ ] **D4** — 快取、重連 + 對帳、詳情頁、Debug HUD
 - [ ] **D5** — `ARCHITECTURE.md`、Instruments 驗證、錄影
@@ -80,6 +91,12 @@
 | 2026-08-05 | **漲跌閃爍改用明確指定 fromValue/toValue 的 `CABasicAnimation`** | **實際發生的 bug，且靠讀程式碼找不到、必須實際跑模擬器才抓到。** 原寫法是 `label.backgroundColor = color` 後用 `UIView.animate` 淡回 `.clear`：設定背景色只寫進 model layer、該 runloop 尚未 commit，UIKit 建立動畫時取到的起始值仍是上一幀的 `.clear`，動畫變成 clear → clear，完全看不見。惡劣之處在於動畫確實被加到 layer 上、`animationKeys()` 有值、無任何警告。Hashimoto 產物：`MatchCellTests.test_閃爍動畫的起始顏色必須是不透明的` 直接斷言 `fromValue` 的 alpha > 0 |
 | 2026-08-05 | 動畫改在 `dataSource.apply` 之後觸發，不寫在 cellProvider 內 | 職責分離：cellProvider 只負責內容；且它也會因滾動被呼叫，在那裡播動畫會讓滾過去的格子全在閃。（註：先前一度誤判這是不閃的根因，實際根因見上一列）|
 | 2026-08-05 | 除錯方法論：連兩次盲猜失敗後改為實測 | 用「只設背景色、不做動畫」的區隔測試，一次就定位到問題在動畫而非佈局或呼叫路徑。教訓：UIKit 的渲染行為不要靠讀程式碼推論 |
+| 2026-08-05 | **`CADisplayLink` 改用弱引用代理 `DisplayLinkProxy`** | `CADisplayLink(target:)` 強引用 target。VC 若走過 `viewWillAppear` 卻沒有配對的 `viewDidDisappear`，就永久洩漏，而 `deinit` 裡的 `invalidate()` 正好在最需要它時執行不到 |
+| 2026-08-05 | **flush 加上 `isFlushing` 互斥旗標** | 每個節拍各開 Task 且 flush 內有多個 await 點，前後兩輪交錯時前一輪的 `clearChanges` 會抹掉後一輪剛讀到的漲跌標記，造成漏閃。負載越高越明顯 |
+| 2026-08-05 | **事件消費者改為整個生命週期只建立一次；連線改由 `pauseStreaming`/`resumeStreaming` 控制** | 原本 `start()` 只擋 `.loading`，第二次呼叫會對同一個 `AsyncStream` 建立第二個迭代器 —— 單一消費者限制會直接觸發執行期錯誤。同時解決「離開畫面後推播仍持續」的問題 |
+| 2026-08-05 | **`MockAPIClient` 不再以延遲種子覆寫資料集種子** | 呼叫端明確指定的 `datasetConfiguration.seed` 被靜默丟棄，資料看起來正常但與預期不同，除錯時極難察覺 |
+| 2026-08-05 | **fire-and-forget `Task` 一律明確捕捉相依物件而非 self** | `Task { await viewModel.start() }` 會因存取 self 的屬性而隱式強引用整個 VC，載入完成前無法釋放。改為 `Task { [viewModel] in ... }` |
+| 2026-08-05 | **修正一支恆真的測試** | `test_離開畫面後停止產生UI工作` 在 view 未加入 window 時 display link 本就不觸發，把 `stopDisplayLink()` 刪掉照樣過。改為直接斷言節拍狀態，並補上 VC 釋放的洩漏測試（含對照組）|
 | 2026-08-05 | **Concurrency 與 Combine 並用，邊界明確** | 跨執行緒狀態存取 → actor/AsyncStream；ViewModel→View 綁定 → Combine。文件的架構說明文件正好要求說明兩者使用場景 |
 | 2026-08-05 | Deployment target iOS 16.0 | `reconfigureItems` 需 iOS 15+，是「不整頁 reload」的核心 API |
 
