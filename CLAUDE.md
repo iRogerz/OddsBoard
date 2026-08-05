@@ -54,6 +54,17 @@ xcodebuild -project OddsBoard.xcodeproj -scheme OddsBoard \
 swiftlint --strict
 ```
 
+## 已知的建置設定取捨
+
+`ENABLE_USER_SCRIPT_SANDBOXING = NO`。Xcode 15 起 script build phase 預設在
+sandbox 內執行，只能讀取宣告過的 input 檔案；SwiftLint 需要讀 `.swiftlint.yml`
+與整個原始碼樹，在 sandbox 下會被拒絕存取。整棵原始碼樹無法逐一宣告成 input，
+因此關閉 script sandbox。
+
+本專案只有一個 script phase，內容就是呼叫 swiftlint，沒有其他外部腳本，
+關閉的風險面很小。這是為了保住「規則由機器強制」而付出的代價 ——
+若兩者只能擇一，寧可要 lint。
+
 ## 給 agent 的行為指令
 
 - 動工前先讀 `docs/sdd-progress.md`，完成任何一個階段後更新它。
