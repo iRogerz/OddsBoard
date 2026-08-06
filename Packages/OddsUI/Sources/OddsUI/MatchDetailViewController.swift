@@ -75,6 +75,16 @@ public final class MatchDetailViewController: UIViewController {
         viewModel.stopObserving()
     }
 
+    // MARK: - 測試觀察窗
+
+    /// 測試用：teamA 賠率標籤的當前文字。
+    ///
+    /// 標籤本身維持 `private` —— 測試該驗的是「畫面上顯示什麼」，
+    /// 而不是內部有哪些 view。開一個唯讀窗口比放寬可見性精準。
+    var teamAOddsTextForTesting: String? {
+        teamAOddsLabel.text
+    }
+
     // MARK: - 綁定
 
     private func bind() {
