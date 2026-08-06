@@ -104,6 +104,17 @@ public final class MatchListViewController: UIViewController {
     /// 選到某一場比賽。由 Composition Root 接上導覽。
     public var onSelectMatch: ((Int) -> Void)?
 
+    /// Debug 用：切換 API 是否要模擬失敗。由 Composition Root 接上具體實作。
+    ///
+    /// View 層只認識 `MatchAPI` protocol，不認識 `MockAPIClient`，因此無法自己
+    /// 切換失敗模式。用一個 hook 交給 Composition Root，錯誤路徑得以從 UI 觸發，
+    /// 而分層不被破壞 —— 與 `onSelectMatch` 是同一個模式。
+    public var onSimulateAPIFailure: ((Bool) async -> Void)?
+
+    /// 目前是否處於模擬失敗狀態。只影響 Debug 選單的文字。
+    /// module 內可見（非 private）：由 MatchListViewController+Debug 讀寫。
+    var isSimulatingAPIFailure = false
+
     public init(viewModel: MatchListViewModel) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
@@ -127,6 +138,7 @@ public final class MatchListViewController: UIViewController {
         view.backgroundColor = .systemBackground
 
         setUpLayout()
+        setUpDebugButton()
         bind()
         observeApplicationLifecycle()
 
@@ -309,18 +321,23 @@ public final class MatchListViewController: UIViewController {
             make.bottom.equalTo(view.safeAreaLayoutGuide).offset(-8)
             make.leading.trailing.equalTo(view.layoutMarginsGuide)
         }
-
-        let longPress = UILongPressGestureRecognizer(
-            target: self,
-            action: #selector(handleLongPress(_:))
-        )
-        view.addGestureRecognizer(longPress)
     }
 
-    @objc
-    private func handleLongPress(_ recognizer: UILongPressGestureRecognizer) {
-        guard recognizer.state == .began else { return }
-        showDebugMenu()
+    /// Debug 面板的入口放在導覽列，而不是長按手勢。
+    ///
+    /// 長按是隱藏手勢：reviewer 自己跑 App 時不會發現這個面板存在，
+    /// 而它正是「加壓到 100 倍仍然順暢」最有力的證據。錄影時長按在畫面上
+    /// 也看不見，觀眾只會看到選單莫名跳出來。導覽列按鈕則是自我說明的。
+    ///
+    /// 用文字而非 SF Symbol：`ladybug` 圖示在新版 navigation bar 的內部
+    /// layout（`NavigationButtonBar.ItemWrapperView`）會產生約束衝突警告，
+    /// 而文字的 intrinsic content size 是明確的。「Debug」本身也比一隻蟲
+    /// 更自我說明 —— 這正是把入口從長按改成按鈕的初衷。
+    private func setUpDebugButton() {
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            title: "Debug",
+            menu: makeDebugMenu()
+        )
     }
 }
 

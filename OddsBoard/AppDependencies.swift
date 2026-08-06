@@ -82,6 +82,14 @@ final class AppDependencies {
 
         let viewController = MatchListViewController(viewModel: viewModel)
 
+        // Debug 面板要能觸發載入失敗，但 View 層只認識 `MatchAPI` protocol，
+        // 不認識 `MockAPIClient`。切換失敗模式的權責因此留在 Composition Root ——
+        // 這是唯一知道具體型別的地方，分層不會因為一個 debug 功能而破洞。
+        let api = session.api
+        viewController.onSimulateAPIFailure = { shouldFail in
+            await api.setFailureMode(shouldFail ? .always : .never)
+        }
+
         // 導覽由 Composition Root 負責，view controller 只回報「使用者選了誰」。
         // 這讓列表不需要知道詳情頁的存在，也不必持有 navigation controller。
         viewController.onSelectMatch = { [weak navigationController, weak self] matchID in
