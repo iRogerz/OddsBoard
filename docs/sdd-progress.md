@@ -29,10 +29,11 @@
 | Code review 修正輪（6 項）| ✅ 已驗證 |
 | D4 快取 + 重連對帳 + 詳情頁 + Debug HUD | ✅ 已驗證 |
 | D4 code review 修正（7 項）| ✅ 已驗證 |
+| **subagent 冷眼審查修正（3 項）** | ✅ 已驗證 |
 | D5 `ARCHITECTURE.md` + Instruments + 錄影 | ⬜ |
 | Phase 6 Skill 萃取 | ⬜ |
 
-**測試數**：`OddsCore` 73 + `OddsPresentation` 32 + `OddsBoardTests` 19 = **124**
+**測試數**：`OddsCore` 73 + `OddsPresentation` 32 + `OddsBoardTests` 23 = **128**
 
 **Repo**：https://github.com/iRogerz/OddsBoard （**public**，交件直接貼連結即可）
 
@@ -50,6 +51,22 @@
 - [ ] 建議交件前由使用者跑一次 `/code-review ultra`（多 agent 深度審查，僅使用者可觸發）
 - [ ] **Phase 6** — 萃取可重用的 SKILL.md
 
+### 「切換畫面後快速恢復」的兩層（務必寫進 ARCHITECTURE.md）
+
+這個加分項其實有兩層，分開講比只說「我做了快取」有說服力得多：
+
+1. **同一次啟動內**（push/pop、tab 切換）—— 靠的是 **ViewModel 的所有權**，
+   不是快取。這兩種情況下 view controller 都活著（push 只是被蓋住；tab
+   controller 一直持有子 VC），所以「回來時資料還在」是**不做錯事就免費得到**的。
+   會失敗的是寫錯的實作：每次 `viewDidLoad` 重建 ViewModel、或 coordinator
+   每次 new 一個 —— 那回來就會看到轉圈。
+2. **跨啟動**（冷啟動、被系統回收後重啟）—— 這才是 `FileSnapshotCache`
+   唯一有意義的舞台。push/pop 與 tab 切換都碰不到它。
+
+附帶記錄：`isMovingFromParent` 在 tab 架構下**永遠是 false**，跟 navigation
+的 root VC 一樣。用 UIKit 的容器語意去判斷業務意圖本身就脆弱 ——
+這是今天那個 bug 的通則。
+
 ### 錄影腳本要帶到的考點
 
 1. 列表依開賽時間升序、100 場比賽
@@ -58,6 +75,8 @@
 4. HUD 顯示 reloadData 次數為 0
 5. 模擬斷線 → 狀態列顯示重試次數 → 重連後全量對帳
 6. 點進詳情頁（賠率與走勢圖持續更新）→ 返回列表**無載入過程**
+7. **把 App 殺掉重開** → 列表瞬間出現（磁碟快取）→ 隨即被即時資料取代。
+   這是磁碟快取唯一能被看見的時刻，第 6 點展示的其實是物件所有權而非快取
 
 ### 刻意保留、不修的項目（D5 寫進 ARCHITECTURE.md 的「已知限制」）
 
@@ -133,6 +152,10 @@
 | 2026-08-05 | **fire-and-forget `Task` 一律明確捕捉相依物件而非 self** | `Task { await viewModel.start() }` 會因存取 self 的屬性而隱式強引用整個 VC，載入完成前無法釋放。改為 `Task { [viewModel] in ... }` |
 | 2026-08-05 | **修正一支恆真的測試** | `test_離開畫面後停止產生UI工作` 在 view 未加入 window 時 display link 本就不觸發，把 `stopDisplayLink()` 刪掉照樣過。改為直接斷言節拍狀態，並補上 VC 釋放的洩漏測試（含對照組）|
 | 2026-08-05 | **Concurrency 與 Combine 並用，邊界明確** | 跨執行緒狀態存取 → actor/AsyncStream；ViewModel→View 綁定 → Combine。文件的架構說明文件正好要求說明兩者使用場景 |
+| 2026-08-06 | **`resyncFailed` 必須接上 UI**（subagent 審查發現）| 修 D4 第 4 項時把 `connectionState = .failed` 換成獨立旗標，卻沒接到任何 UI —— 把「可見的失敗訊號」變成「完全靜默」，比修之前更糟。已用 `CombineLatest` 併入狀態列 |
+| 2026-08-06 | **暫停/存檔改掛 App 生命週期通知**（subagent 審查發現）| 原本用 `isMovingFromParent \|\| isBeingDismissed` 當條件，但列表是 nav root，永遠不會被 pop 或 dismiss，兩者恆為 false ⇒ `pauseStreaming()` 成為死程式碼、`saveSnapshot()` 只剩冷啟動一個呼叫點。改掛 `didEnterBackground` / `willEnterForeground`，也才符合 spec §FR-5 |
+| 2026-08-06 | **第二支恆真測試已修正** | `test_被詳情頁覆蓋時不中斷推播` 斷言的是測試自己擺好的 UIKit 事實。改用 `SpyOddsSocket` 直接數 `disconnect()` 次數 |
+| 2026-08-06 | **建立 `code-reviewer` subagent 做冷眼審查** | 位於 `~/.claude/agents/code-reviewer.md`。獨立 context、無作者偏見，一次就抓到兩個我自審漏掉的 Important。日常用它，交件前再由使用者跑一次 `/code-review ultra` |
 | 2026-08-05 | Deployment target iOS 16.0 | `reconfigureItems` 需 iOS 15+，是「不整頁 reload」的核心 API |
 
 ---

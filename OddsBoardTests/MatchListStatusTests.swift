@@ -10,7 +10,7 @@ import OddsPresentation
 @MainActor
 final class MatchListStatusTests: XCTestCase {
 
-    private func makeSubject() -> (MatchListViewController, MatchListViewModel, FakeSocket) {
+    private func makeSubject() -> (MatchListViewController, MatchListViewModel, SpyOddsSocket) {
         let dataset = MockDataset.make(
             configuration: MockDataset.Configuration(matchCount: 5),
             referenceDate: Date(timeIntervalSince1970: 1_720_099_200)
@@ -18,7 +18,7 @@ final class MatchListStatusTests: XCTestCase {
         var apiConfiguration = MockAPIClient.Configuration()
         apiConfiguration.latencyRange = 1...1
 
-        let socket = FakeSocket()
+        let socket = SpyOddsSocket()
         let viewModel = MatchListViewModel(
             api: MockAPIClient(dataset: dataset, configuration: apiConfiguration),
             store: OddsStore(),
@@ -71,26 +71,47 @@ final class MatchListStatusTests: XCTestCase {
             XCTAssertTrue(shown, "狀態 \(state) 應顯示包含「\(expected)」的文字")
         }
     }
-}
 
-/// 可由測試注入事件的推播替身。
-private actor FakeSocket: OddsStreaming {
+    /// **對帳失敗必須可見。**
+    ///
+    /// 它代表「重連成功了，但斷線期間遺失的推播沒補回來」——
+    /// 部分場次會停在舊值且不會自我修正，而畫面其他地方看起來一切正常。
+    /// 曾經有一版把這個訊號從 `connectionState = .failed` 改成獨立旗標，
+    /// 卻沒接到任何 UI，等於把可見的失敗變成完全靜默。
+    func test_對帳失敗時狀態列要看得出來() async {
+        let dataset = MockDataset.make(
+            configuration: MockDataset.Configuration(matchCount: 5),
+            referenceDate: Date(timeIntervalSince1970: 1_720_099_200)
+        )
+        let api = ControllableAPI(matches: dataset.matches, odds: dataset.odds)
+        let socket = SpyOddsSocket()
+        let viewModel = MatchListViewModel(
+            api: api,
+            store: OddsStore(),
+            socket: socket
+        )
+        let viewController = MatchListViewController(viewModel: viewModel)
+        viewController.loadViewIfNeeded()
+        _ = await waitUntil { viewModel.loadState == .loaded }
 
-    nonisolated let events: AsyncStream<OddsStreamEvent>
-    private let continuation: AsyncStream<OddsStreamEvent>.Continuation
+        // 首次載入成功之後才讓 fetchOdds 失敗，這樣壞掉的只有對帳那一次。
+        await api.setError(.simulatedNetworkFailure)
 
-    init() {
-        let pipe = AsyncStream<OddsStreamEvent>.makePipe()
-        self.events = pipe.stream
-        self.continuation = pipe.continuation
-    }
+        socket.emit(.connectionState(.reconnecting(attempt: 1)))
+        _ = await waitUntil { viewModel.connectionState == .reconnecting(attempt: 1) }
+        socket.emit(.connectionState(.connected))
 
-    func connect() {}
-    func disconnect() {}
-    func setUpdatesPerSecond(_ rate: Int) {}
-    func simulateDisconnection() {}
+        let failed = await waitUntil { viewModel.resyncFailed }
+        XCTAssertTrue(failed, "前置條件：對帳應該失敗")
 
-    nonisolated func emit(_ event: OddsStreamEvent) {
-        continuation.yield(event)
+        let visible = await waitUntil {
+            viewController.statusTextForTesting?.contains("校正失敗") == true
+        }
+
+        XCTAssertTrue(
+            visible,
+            "對帳失敗若不顯示，使用者沒有任何線索可以察覺部分場次停在舊值。"
+                + "實際文字：\(viewController.statusTextForTesting ?? "nil")"
+        )
     }
 }

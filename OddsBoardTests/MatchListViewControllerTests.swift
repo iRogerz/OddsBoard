@@ -10,6 +10,25 @@ import OddsPresentation
 @MainActor
 final class MatchListViewControllerTests: XCTestCase {
 
+    private func makeSpySubject(
+        matchCount: Int = 20
+    ) -> (MatchListViewController, MatchListViewModel, SpyOddsSocket) {
+        let dataset = MockDataset.make(
+            configuration: MockDataset.Configuration(matchCount: matchCount),
+            referenceDate: Date(timeIntervalSince1970: 1_720_099_200)
+        )
+        var apiConfiguration = MockAPIClient.Configuration()
+        apiConfiguration.latencyRange = 1...1
+
+        let socket = SpyOddsSocket()
+        let viewModel = MatchListViewModel(
+            api: MockAPIClient(dataset: dataset, configuration: apiConfiguration),
+            store: OddsStore(),
+            socket: socket
+        )
+        return (MatchListViewController(viewModel: viewModel), viewModel, socket)
+    }
+
     private func makeSubject(matchCount: Int = 20) -> (MatchListViewController, MatchListViewModel) {
         let dataset = MockDataset.make(
             configuration: MockDataset.Configuration(matchCount: matchCount),
@@ -139,26 +158,86 @@ final class MatchListViewControllerTests: XCTestCase {
         )
     }
 
-    /// 曾經的 bug：`viewDidDisappear` 無條件中斷推播，而 push 詳情頁也會
-    /// 觸發它 —— 詳情頁的賠率與走勢圖在進入的瞬間就凍結了。
+    /// 這支測試原本是恆真的：它斷言 `isMovingFromParent == false`，
+    /// 而那是測試自己剛擺好的 UIKit 事實，與被修的那行 guard 無關 ——
+    /// 把 guard 整行刪掉照樣過。改為直接數 `disconnect()` 的呼叫次數。
     func test_被詳情頁覆蓋時不中斷推播() async {
-        let (viewController, viewModel) = makeSubject(matchCount: 20)
+        let (viewController, viewModel, socket) = makeSpySubject()
         let navigationController = UINavigationController(rootViewController: viewController)
         viewController.loadViewIfNeeded()
         _ = await waitUntilLoaded(viewModel)
 
         viewController.viewWillAppear(false)
-        // push 一個畫面覆蓋列表：列表沒有離開導覽堆疊。
         navigationController.pushViewController(UIViewController(), animated: false)
         viewController.viewDidDisappear(false)
+        for _ in 0..<200 { await Task.yield() }
 
+        let disconnects = await socket.disconnectCount
+        XCTAssertEqual(
+            disconnects,
+            0,
+            "推播若在此中斷，詳情頁的賠率與走勢圖會在進入的瞬間凍結"
+        )
         XCTAssertFalse(
             viewController.isDisplayLinkRunningForTesting,
             "看不見的畫面不該繼續做 UI 工作"
         )
+    }
+
+    /// 列表是 navigation controller 的 root，永遠不會被 pop 或 dismiss。
+    /// 因此任何以「離開列表」為條件的暫停都是死程式碼 ——
+    /// 真正該中斷連線與寫入快照的時機是 App 進背景。
+    func test_進入背景時中斷推播() async {
+        let (viewController, viewModel, socket) = makeSpySubject()
+        viewController.loadViewIfNeeded()
+        _ = await waitUntilLoaded(viewModel)
+        viewController.viewWillAppear(false)
+
+        viewController.handleDidEnterBackground()
+        for _ in 0..<200 { await Task.yield() }
+
+        let disconnects = await socket.disconnectCount
+        XCTAssertEqual(disconnects, 1, "背景中維持連線等於白白耗電")
         XCTAssertFalse(
-            viewController.isMovingFromParent,
-            "列表仍在堆疊中，推播不該被中斷 —— 否則詳情頁會完全靜止"
+            viewController.isDisplayLinkRunningForTesting,
+            "背景中不該有任何 UI 工作"
+        )
+    }
+
+    func test_回到前景時恢復推播與節拍() async {
+        let (viewController, viewModel, socket) = makeSpySubject()
+        viewController.loadViewIfNeeded()
+        _ = await waitUntilLoaded(viewModel)
+        viewController.viewWillAppear(false)
+        viewController.handleDidEnterBackground()
+        for _ in 0..<200 { await Task.yield() }
+        let connectsAfterBackground = await socket.connectCount
+
+        viewController.handleWillEnterForeground()
+        for _ in 0..<200 { await Task.yield() }
+
+        let connectsAfterForeground = await socket.connectCount
+        XCTAssertGreaterThan(connectsAfterForeground, connectsAfterBackground)
+        XCTAssertTrue(viewController.isDisplayLinkRunningForTesting)
+    }
+
+    /// 若使用者離開 App 前停留在詳情頁，回到前景時列表不該在背後重新開始更新。
+    func test_停留在詳情頁時回到前景不重啟列表節拍() async {
+        let (viewController, viewModel, _) = makeSpySubject()
+        let navigationController = UINavigationController(rootViewController: viewController)
+        viewController.loadViewIfNeeded()
+        _ = await waitUntilLoaded(viewModel)
+        viewController.viewWillAppear(false)
+
+        navigationController.pushViewController(UIViewController(), animated: false)
+        viewController.viewDidDisappear(false)
+        viewController.handleDidEnterBackground()
+        viewController.handleWillEnterForeground()
+        for _ in 0..<200 { await Task.yield() }
+
+        XCTAssertFalse(
+            viewController.isDisplayLinkRunningForTesting,
+            "列表不在畫面上，不該為它做 UI 工作"
         )
     }
 }

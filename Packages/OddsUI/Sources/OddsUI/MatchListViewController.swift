@@ -17,7 +17,9 @@ import UIKit
 ///    約 10 列，約九成的推播根本不需要碰 UI。
 public final class MatchListViewController: UIViewController {
 
-    private enum Section {
+    /// module 內可見（非 private）：diffable snapshot 的組裝拆在
+    /// MatchListViewController+Binding。
+    enum Section {
         case main
     }
 
@@ -31,12 +33,17 @@ public final class MatchListViewController: UIViewController {
 
     /// module 內可見（非 private）：Debug 面板拆在同模組的另一個檔案裡。
     let viewModel: MatchListViewModel
-    private var cancellables: Set<AnyCancellable> = []
+    /// module 內可見（非 private）：綁定拆在 MatchListViewController+Binding。
+    var cancellables: Set<AnyCancellable> = []
     /// module 內可見（非 private）：由 MatchListViewController+Testing 讀取。
     var displayLink: CADisplayLink?
     private var displayLinkProxy: DisplayLinkProxy?
     private var lastFlushTimestamp: CFTimeInterval = 0
     private var isFlushing = false
+
+    /// 列表目前是否在畫面上。回到前景時據此決定要不要重啟節拍 ——
+    /// 若當時停留在詳情頁，列表不該恢復更新。
+    var isVisible = false
 
     private lazy var tableView: UITableView = {
         let tableView = UITableView(frame: .zero, style: .plain)
@@ -50,7 +57,7 @@ public final class MatchListViewController: UIViewController {
         return tableView
     }()
 
-    private lazy var dataSource = makeDataSource()
+    lazy var dataSource = makeDataSource()
 
     /// module 內可見（非 private）：由 MatchListViewController+Testing 讀取。
     let statusLabel: UILabel = {
@@ -61,11 +68,11 @@ public final class MatchListViewController: UIViewController {
         return label
     }()
 
-    private let loadingIndicator = UIActivityIndicatorView(style: .large)
+    let loadingIndicator = UIActivityIndicatorView(style: .large)
 
     /// 過期快取的警示橫幅。
     /// 直接拿舊賠率當現值顯示，在博弈情境是最危險的一類錯誤。
-    private let staleBanner: UILabel = {
+    let staleBanner: UILabel = {
         let label = UILabel()
         label.font = .preferredFont(forTextStyle: .caption1)
         label.textAlignment = .center
@@ -121,6 +128,7 @@ public final class MatchListViewController: UIViewController {
 
         setUpLayout()
         bind()
+        observeApplicationLifecycle()
 
         // 只捕捉 viewModel，不捕捉 self。
         // 寫成 `Task { await viewModel.start() }` 會因為存取 self 的屬性而
@@ -130,96 +138,30 @@ public final class MatchListViewController: UIViewController {
 
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        isVisible = true
         startDisplayLink()
         Task { [viewModel] in await viewModel.resumeStreaming() }
     }
 
     public override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        // 節拍一律停：看不見的畫面不該做任何 UI 工作。
+        isVisible = false
+
+        // **這裡只停節拍，不碰推播。**
+        //
+        // push 詳情頁也會觸發 viewDidDisappear。若在此中斷推播，詳情頁的賠率
+        // 與走勢圖會在進入的瞬間凍結 —— 一個標榜即時的畫面實際上是靜態的。
+        //
+        // 曾經改用 `isMovingFromParent || isBeingDismissed` 當條件，但列表是
+        // navigation controller 的 root，永遠不會被 pop 也不會被 dismiss，
+        // 兩個條件恆為 false，整條暫停/存檔路徑因此變成死程式碼。
+        // 正確的觸發點是 App 生命週期（見 MatchListViewController+Lifecycle）。
         stopDisplayLink()
-
-        // 但推播只在**真正離開列表**時才中斷。
-        // push 詳情頁也會觸發 viewDidDisappear，若在此無條件中斷，
-        // 詳情頁的賠率與走勢圖會在進入的瞬間凍結 —— 一個標榜即時的畫面
-        // 實際上是靜態的。
-        guard isMovingFromParent || isBeingDismissed else { return }
-        Task { [viewModel] in await viewModel.pauseStreaming() }
-    }
-
-    // MARK: - 綁定
-
-    private func bind() {
-        // 列表順序只在載入時變動，因此 snapshot 也只在這時 apply 一次。
-        viewModel.$orderedMatchIDs
-            .removeDuplicates()
-            .sink { [weak self] matchIDs in
-                self?.applySnapshot(matchIDs: matchIDs)
-            }
-            .store(in: &cancellables)
-
-        viewModel.$loadState
-            .removeDuplicates()
-            .sink { [weak self] state in
-                self?.render(state)
-            }
-            .store(in: &cancellables)
-
-        viewModel.$connectionState
-            .removeDuplicates()
-            .sink { [weak self] state in
-                self?.renderConnection(state)
-            }
-            .store(in: &cancellables)
-
-        viewModel.$isShowingStaleData
-            .removeDuplicates()
-            .sink { [weak self] isStale in
-                self?.staleBanner.isHidden = !isStale
-            }
-            .store(in: &cancellables)
-    }
-
-    private func applySnapshot(matchIDs: [Int]) {
-        var snapshot = NSDiffableDataSourceSnapshot<Section, Int>()
-        snapshot.appendSections([.main])
-        snapshot.appendItems(matchIDs, toSection: .main)
-        dataSource.apply(snapshot, animatingDifferences: false)
-    }
-
-    private func render(_ state: MatchListViewModel.LoadState) {
-        switch state {
-        case .idle, .loading:
-            loadingIndicator.startAnimating()
-            statusLabel.text = "載入中…"
-        case .loaded:
-            loadingIndicator.stopAnimating()
-        case .failed(let message):
-            loadingIndicator.stopAnimating()
-            statusLabel.text = "載入失敗：\(message)"
-        }
-    }
-
-    private func renderConnection(_ state: OddsConnectionState) {
-        guard case .loaded = viewModel.loadState else { return }
-
-        switch state {
-        case .idle:
-            statusLabel.text = "已中斷"
-        case .connecting:
-            statusLabel.text = "連線中…"
-        case .connected:
-            statusLabel.text = "● 即時更新中"
-        case .reconnecting(let attempt):
-            statusLabel.text = "連線中斷，重試中（第 \(attempt) 次）"
-        case .failed:
-            statusLabel.text = "無法連線"
-        }
     }
 
     // MARK: - 更新節拍
 
-    private func startDisplayLink() {
+    func startDisplayLink() {
         guard displayLink == nil else { return }
 
         // 透過弱引用代理，避免 CADisplayLink 強引用住本 VC（見 DisplayLinkProxy）。
@@ -236,7 +178,7 @@ public final class MatchListViewController: UIViewController {
         displayLink = link
     }
 
-    private func stopDisplayLink() {
+    func stopDisplayLink() {
         displayLink?.invalidate()
         displayLink = nil
         displayLinkProxy = nil
