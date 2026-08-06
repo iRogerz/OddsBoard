@@ -35,6 +35,7 @@
 | [`docs/verification.md`](docs/verification.md) | Instruments 檢查清單與錄影腳本。每項都寫死「看什麼、什麼算通過」 |
 | [`CLAUDE.md`](CLAUDE.md) | 專案憲法：不可違反的規則、架構、非同步邊界 |
 | [`docs/sdd-progress.md`](docs/sdd-progress.md) | 開發進度與逐條決策紀錄（開發過程用，非交件內容） |
+| [`skills/uikit-realtime-list/`](skills/uikit-realtime-list/) | 從本專案萃取的可重用模式：三層更新策略、五個讀程式碼找不到的陷阱、驗證分層 |
 
 ## 操作影片
 
