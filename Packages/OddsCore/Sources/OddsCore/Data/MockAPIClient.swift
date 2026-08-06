@@ -43,7 +43,7 @@ public actor MockAPIClient: MatchAPI {
     /// 重連後的全量對帳才是真的校正，而不是把畫面重置回初始值。
     public typealias LiveOddsProvider = @Sendable () async -> [Odds]
 
-    private let configuration: Configuration
+    private var configuration: Configuration
     private let clock: AppClock
     private let dataset: MockDataset
     private let liveOdds: LiveOddsProvider?
@@ -82,6 +82,17 @@ public actor MockAPIClient: MatchAPI {
             configuration: configuration,
             clock: clock
         )
+    }
+
+    // MARK: - Debug
+
+    /// 即時切換失敗模式，讓錯誤路徑能從 Debug 面板被觸發。
+    ///
+    /// 沒有這個入口的話，`.failed` 那條 UI 分支在 App 裡是永遠走不到的死碼 ——
+    /// 只有單元測試碰得到它，錄影也拍不到（`docs/spec.md` §FR-1.4 的原意是
+    /// 「錯誤 UI 不該是死碼」，僅靠建構子注入並不足以達成）。
+    public func setFailureMode(_ mode: FailureMode) {
+        configuration.failureMode = mode
     }
 
     // MARK: - MatchAPI

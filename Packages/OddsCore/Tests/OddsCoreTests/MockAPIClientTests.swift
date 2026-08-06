@@ -227,4 +227,38 @@ final class MockAPIClientTests: XCTestCase {
 
         XCTAssertEqual(odds, dataset.odds)
     }
+
+    // MARK: - 執行期切換失敗模式
+
+    /// 失敗模式必須能在建構之後切換，否則 `.failed` 那條 UI 分支
+    /// 在 App 裡是永遠走不到的死碼 —— 只有測試碰得到它（spec §FR-1.4）。
+    func test_可在執行期切換成失敗() async {
+        let client = MockAPIClient(
+            dataset: MockDataset.make(referenceDate: referenceDate),
+            configuration: MockAPIClient.Configuration(),
+            clock: ImmediateClock()
+        )
+
+        await client.setFailureMode(.always)
+
+        do {
+            _ = try await client.fetchMatches()
+            XCTFail("切換成 .always 之後必須失敗")
+        } catch {
+            XCTAssertEqual(error as? MatchAPIError, .simulatedNetworkFailure)
+        }
+    }
+
+    func test_可從失敗切換回正常() async throws {
+        let client = MockAPIClient(
+            dataset: MockDataset.make(referenceDate: referenceDate),
+            configuration: MockAPIClient.Configuration(failureMode: .always),
+            clock: ImmediateClock()
+        )
+
+        await client.setFailureMode(.never)
+        let matches = try await client.fetchMatches()
+
+        XCTAssertEqual(matches.count, 100)
+    }
 }
