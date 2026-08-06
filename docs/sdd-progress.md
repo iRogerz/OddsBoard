@@ -61,7 +61,7 @@ Instruments 截圖進 repo（`docs/instruments-*.png`，共 1.5MB），
 
 - [x] **`ARCHITECTURE.md`** — 三題各自成節（§2 Concurrency/Combine 邊界、
       §3 thread-safe、§4 UI 綁定），加上 §5 不整頁 reload 的三層策略、
-      §5 不整頁 reload 的三層策略、§6 加分項摘要、§7 已知限制與未完成部分。
+      §6 加分項摘要、§7 已知限制與未完成部分。
       **後續精簡過**：從 537 行砍到 169 行，敘事細節移到 `docs/talking-points.md`
 - [x] **README 交件版** — 開場改成「這個專案在解什麼問題」，補上 Debug 面板操作說明
 - [x] **`docs/verification.md`** — Instruments 五項（TSan / Allocations / Leaks /
