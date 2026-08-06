@@ -25,3 +25,7 @@ Packages/*/.build/
 
 # 作業原始題目（公司內部文件，不進版控）
 *_Home_Test.pdf
+
+# 面試準備筆記：個人用，內容含「哪裡我不滿意」「被問到怎麼答」這類
+# 不適合放進 public repo 的內容，刻意排除在交件之外。
+docs/talking-points.md

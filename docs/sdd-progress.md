@@ -9,7 +9,14 @@
 
 ## 目前階段
 
-**Phase 4 完成。D1–D4 全部實作、驗證、並通過兩輪 code review 修正。下一步是 D5（交件文件與驗證）。**
+**D5 全數完成。** 文件（`ARCHITECTURE.md`、README 交件版、`docs/verification.md`）、
+Instruments 五項實測（全過）、功能回歸九項（全過）、操作錄影八幕（已完成）。
+
+**目前狀態：程式碼與文件都還沒 commit。** 交件前尚待：
+1. commit + push 到 public repo
+2. 決定錄影檔的交付方式（不建議進 git）
+3. 建議由使用者跑一次 `/code-review ultra`
+4. Phase 6（Skill 萃取）—— 與交件無關，可之後做
 
 ---
 
@@ -30,28 +37,52 @@
 | D4 快取 + 重連對帳 + 詳情頁 + Debug HUD | ✅ 已驗證 |
 | D4 code review 修正（7 項）| ✅ 已驗證 |
 | **subagent 冷眼審查修正（3 項）** | ✅ 已驗證 |
-| D5 `ARCHITECTURE.md` + Instruments + 錄影 | ⬜ |
+| **D5-a `ARCHITECTURE.md`** | ✅ |
+| **D5-b README 交件版** | ✅ |
+| **D5-c `docs/verification.md`**（Instruments 清單 + 錄影腳本）| ✅ |
+| D5-d Instruments 實測（人工）| ✅ **實機五項全過**（見下方）|
+| D5-e 操作錄影（人工）| ✅ 八幕已錄完 |
+| **功能回歸驗證（九項）** | ✅ 全過 |
 | Phase 6 Skill 萃取 | ⬜ |
 
-**測試數**：`OddsCore` 73 + `OddsPresentation` 32 + `OddsBoardTests` 23 = **128**
+**測試數**：`OddsCore` 75 + `OddsPresentation` 36 + `OddsBoardTests` 27 = **138**
+（另 `OddsUITests` 1 支模組佔位，`grep func test` 總數為 139）
 
 **Repo**：https://github.com/iRogerz/OddsBoard （**public**，交件直接貼連結即可）
 
 ---
 
-## 待辦（D5：交件前最後一段）
+## 待辦（D5 剩餘 + Phase 6）
 
-- [ ] **`ARCHITECTURE.md`** — 考題點名要回答的三題：
-      Swift Concurrency / Combine 使用場景、如何確保 thread-safe、
-      UI 與 ViewModel 綁定方式。**外加「已知限制與未完成部分」**
-      （考題最後明說會據此評估，見下方「刻意保留項」）
-- [ ] **README 交件版** — 目前偏開發者視角，需補上「這個專案在解什麼問題」的開場
-- [ ] **Instruments 驗證** — memory retain、滾動流暢度（需人工操作，可先寫檢查清單）
-- [ ] **操作錄影** — 依腳本走一遍。錄影本身也是驗證：凍結、不閃這類 bug 會自己跳出來
+- [x] **`ARCHITECTURE.md`** — 三題各自成節（§2 Concurrency/Combine 邊界、
+      §3 thread-safe、§4 UI 綁定），加上 §5 不整頁 reload 的三層策略、
+      §5 不整頁 reload 的三層策略、§6 加分項摘要、§7 已知限制與未完成部分。
+      **後續精簡過**：從 537 行砍到 169 行，敘事細節移到 `docs/talking-points.md`
+- [x] **README 交件版** — 開場改成「這個專案在解什麼問題」，補上 Debug 面板操作說明
+- [x] **`docs/verification.md`** — Instruments 五項（TSan / Allocations / Leaks /
+      Time Profiler / Animation Hitches）各自寫明「看哪個欄位、什麼算通過」，
+      加上八幕錄影腳本與交件前最終檢查表
+- [x] **功能回歸驗證**（人工）— 九項全過，含 `UIDeferredMenuElement` 移除後的選單重建驗收
+- [x] **Instruments 實測**（人工）— **五項全過**。iPhone ProMotion 實機：
+      Hitches 0.82 ms/s（門檻 5）、Hangs 0、主執行緒 CPU 22%、
+      persistent 17.92 MiB 走平、Leaks 三次全綠、Thermal 全程 Nominal；
+      Thread Sanitizer 另在模擬器跑（不支援真機），零筆 data race。
+      數據已寫進 `ARCHITECTURE.md` §5 與 `docs/verification.md` §3
+- [x] **操作錄影**（人工）— 八幕已完成
 - [ ] 建議交件前由使用者跑一次 `/code-review ultra`（多 agent 深度審查，僅使用者可觸發）
 - [ ] **Phase 6** — 萃取可重用的 SKILL.md
 
-### 「切換畫面後快速恢復」的兩層（務必寫進 ARCHITECTURE.md）
+### D5 文件的三個判斷（寫的時候刻意的取捨）
+
+1. **`ARCHITECTURE.md` 不重述 spec，而是回答問題。** spec 已經有 470 行且標了來源，
+   架構文件若只是縮寫版就沒有存在意義。它的定位是「面試官只讀這一份也懂」。
+2. **§7 已知限制寫得比一般專案狠。** 考題最後明說會據此評估，
+   而「知道、可以修、但判斷不修」比「沒發現」有說服力得多。裡面直接寫了
+   「這是我目前最不滿意的一處設計」（連線事件與資料共用會丟棄的緩衝）。
+3. **驗證清單獨立成檔而非塞進 README。** 它是給自己跑的，不是給面試官讀的；
+   混在 README 會稀釋交件文件的重點。
+
+### 「切換畫面後快速恢復」的兩層（✅ 已寫入 `ARCHITECTURE.md` §6）
 
 這個加分項其實有兩層，分開講比只說「我做了快取」有說服力得多：
 
@@ -67,27 +98,30 @@
 的 root VC 一樣。用 UIKit 的容器語意去判斷業務意圖本身就脆弱 ——
 這是今天那個 bug 的通則。
 
-### 錄影腳本要帶到的考點
+### 錄影腳本要帶到的考點（✅ 已擴寫成 `docs/verification.md` §3 的八幕腳本）
 
 1. 列表依開賽時間升序、100 場比賽
 2. 賠率跳動時**只有變動的那一格閃綠/閃紅**，整頁不重繪
-3. 長按開 Debug 面板 → 加壓到 1000 筆/秒，滾動仍順暢
+3. 點右上角 Debug 開選單 → 加壓到 1000 筆/秒，滾動仍順暢
 4. HUD 顯示 reloadData 次數為 0
 5. 模擬斷線 → 狀態列顯示重試次數 → 重連後全量對帳
 6. 點進詳情頁（賠率與走勢圖持續更新）→ 返回列表**無載入過程**
 7. **把 App 殺掉重開** → 列表瞬間出現（磁碟快取）→ 隨即被即時資料取代。
    這是磁碟快取唯一能被看見的時刻，第 6 點展示的其實是物件所有權而非快取
 
-### 刻意保留、不修的項目（D5 寫進 ARCHITECTURE.md 的「已知限制」）
+### 刻意保留、不修的項目（✅ 已寫入 `ARCHITECTURE.md` §7）
 
 - `MockOddsSocket` 的連線狀態事件與賠率資料共用會丟棄的 `bufferingNewest(256)`
   緩衝，極高負載下狀態事件可能被丟掉。正解是控制事件走獨立不丟棄的通道。
 - `OddsStore.replaceAll` 未清掉不在新資料中的比賽的 `acceptedSequence` 與
   `histories`。本專案比賽集合固定，不會觸發。
+- `OddsUITests` 只有一支佔位測試（UI 測試實際都在 `OddsBoardTests`）。
+- 沒有 CI —— 所有閘門都只在本機執行，PR 階段是空的。
+  以上兩項是寫已知限制時新盤出來的，一併列進去。
 
 ---
 
-## 兩輪 code review 的總結（值得寫進 ARCHITECTURE.md）
+## 兩輪 code review 的總結（✅ 精簡版在 `ARCHITECTURE.md`，完整敘事在 `docs/talking-points.md`）
 
 兩輪各找出 6 項與 7 項問題。**最值得記的是「哪一類 bug 靠什麼方式才抓得到」**：
 
@@ -156,6 +190,15 @@
 | 2026-08-06 | **暫停/存檔改掛 App 生命週期通知**（subagent 審查發現）| 原本用 `isMovingFromParent \|\| isBeingDismissed` 當條件，但列表是 nav root，永遠不會被 pop 或 dismiss，兩者恆為 false ⇒ `pauseStreaming()` 成為死程式碼、`saveSnapshot()` 只剩冷啟動一個呼叫點。改掛 `didEnterBackground` / `willEnterForeground`，也才符合 spec §FR-5 |
 | 2026-08-06 | **第二支恆真測試已修正** | `test_被詳情頁覆蓋時不中斷推播` 斷言的是測試自己擺好的 UIKit 事實。改用 `SpyOddsSocket` 直接數 `disconnect()` 次數 |
 | 2026-08-06 | **建立 `code-reviewer` subagent 做冷眼審查** | 位於 `~/.claude/agents/code-reviewer.md`。獨立 context、無作者偏見，一次就抓到兩個我自審漏掉的 Important。日常用它，交件前再由使用者跑一次 `/code-review ultra` |
+| 2026-08-06 | **失敗模式改為可在執行期切換 + Debug 面板加「模擬載入失敗」** | 使用者提問時發現的缺口：`.failed` 那條 UI 分支在 App 裡永遠走不到（`AppDependencies` 用預設 `.never`，面板也沒有入口），只有單元測試碰得到 —— spec FR-1.4 寫「錯誤 UI 才不是死碼」但實際上就是死碼。`MockAPIClient.setFailureMode` + VC 的 `onSimulateAPIFailure` hook（具體型別只在 Composition Root 出現，分層不破）+ ViewModel 的 `reload()`（`start()` 的守衛會擋掉已載入狀態，無法重跑） |
+| 2026-08-06 | **詳情頁的釋放改由測試保證，不再依賴 Instruments Leaks** | 使用者跑 Leaks 遇到 `failed to create a VMUTaskMemoryScanner`（Instruments 與 iOS 模擬器的已知時序問題）。詳情頁是全 App 唯一反覆建立/銷毀的 VC，也就是唯一真有 retain cycle 風險的地方，卻只能靠一個會壞的工具驗。新增 `MatchDetailViewControllerTests` 三支釋放測試（含對照組）+ 一支共用 store 現值的整合測試。`docs/verification.md` §3.3 同步記下這個坑與三個替代方案（Memory Graph Debugger 最實用）|
+| 2026-08-06 | **`loadState == .failed` ⟺ 畫面上沒有即時資料在流動**（不變式）| 使用者看到「載入失敗卻還在跳賠率」而提問。REST 與 WebSocket 是兩條獨立的線，`start()` 拋錯只改 `loadState`，推播完全沒停。**同一個矛盾在 D4 處理 `resyncFailed` 時就寫過警語，補新功能時自己又犯一次。** 修法是在 `start()` 的 catch 加 `socket.disconnect()`，並用 `test_重新載入失敗時必須中斷推播` 釘住。首次冷啟動失敗沒暴露此問題只是因為 `connect()` 排在 `try` 之後 —— 巧合而非設計 |
+| 2026-08-06 | **移除 `UIDeferredMenuElement.uncached`，改為動作後重建選單** | 它會在選單不可見時被求值，console 出現「Called -[UIContextMenuInteraction updateVisibleMenuWithBlock:] while no context menu is visible」。那些文字只會被選單自己的動作改變，事後 `refreshDebugMenu()` 就夠，不需要每次開啟都延遲求值 |
+| 2026-08-06 | **接受導覽列按鈕的 Auto Layout 警告，寫進已知限制** | **前一次判斷不完全對**：以為根因是 image 的 intrinsic size，改成文字後 padding 確實從 2pt 變 12pt（證明改動生效），但衝突照舊 —— 真正的根因是 UIKit 私有的 `NavigationButtonBar.ItemWrapperView.width == 0`，我方未對該按鈕下任何約束。UIKit 自行 recover，視覺正常。消除它需改用 `customView` 繞過系統元件並失去標準間距，判斷不划算 |
+| 2026-08-06 | **Debug 選單改用 `UIMenu`，按鈕改用文字** | 使用者回報兩個症狀，同一個解法治好：(1) 首次點擊有明顯延遲 —— `UIAlertController(.actionSheet)` 第一次呈現要初始化整套 alert 資源，`UIMenu` 走輕量的 context menu 系統；(2) Auto Layout 約束衝突警告 —— image-based `UIBarButtonItem` 在新版 `NavigationButtonBar.ItemWrapperView` 的內部 layout 出現 `width == 0` 衝突（已查證 `ladybug` 是 iOS 14+，非版本問題），文字的 intrinsic size 明確。附帶好處：`UIMenu` 不需要 popover 錨點，iPad crash 的風險連同那段維護一起消失。選單內容用 `UIDeferredMenuElement.uncached` 包住，否則「顯示/隱藏 HUD」的文字會被快取成過期狀態 |
+| 2026-08-06 | **Debug 面板入口從長按改為導覽列按鈕** | 長按是隱藏手勢，reviewer 自己跑 App 不會發現面板存在，而它是「加壓 100 倍仍順暢」最有力的證據；錄影時長按在畫面上也看不見，觀眾只會看到選單莫名跳出。順帶修正 iPad 的 popover 錨點（改綁 barButtonItem，原本綁 view） |
+| 2026-08-06 | **`spec.md` 只清對話痕跡，不重寫** | 它是開發過程的真實產物，重寫會失去可信度，而 🧩 標記（區分「題目要的」vs「主動補的」）正是它最有價值的地方。但「待你審閱確認」「面試講法：」這類對話殘留不該出現在 public repo —— 面試官會想「這個『你』是誰」。§12 從「待你確認的開放項目」改為「開放項目的定案紀錄」 |
+| 2026-08-06 | **D5 文件切成三份而非一份**（`ARCHITECTURE.md` / README / `docs/verification.md`）| 三份的讀者不同：架構文件給面試官、README 給要跑起來的人、驗證清單給自己。混在一起會讓每一份都失焦 |
 | 2026-08-05 | Deployment target iOS 16.0 | `reconfigureItems` 需 iOS 15+，是「不整頁 reload」的核心 API |
 
 ---
