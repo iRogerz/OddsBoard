@@ -21,7 +21,7 @@ Instruments 截圖進 repo（`docs/instruments-*.png`，共 1.5MB），
 1. **push 到 public repo**（commit 已完成，尚未推送）
 2. **確認 YouTube 影片可見性不是「私人」** —— 用無痕視窗實測一次
 3. 建議由使用者跑一次 `/code-review ultra`
-4. Phase 6（Skill 萃取）—— 與交件無關，可之後做
+4. ~~Phase 6（Skill 萃取）~~ ✅ 已完成
 
 ---
 
@@ -48,7 +48,7 @@ Instruments 截圖進 repo（`docs/instruments-*.png`，共 1.5MB），
 | D5-d Instruments 實測（人工）| ✅ **實機五項全過**（見下方）|
 | D5-e 操作錄影（人工）| ✅ 八幕已錄完 |
 | **功能回歸驗證（九項）** | ✅ 全過 |
-| Phase 6 Skill 萃取 | ⬜ |
+| Phase 6 Skill 萃取 | ✅ `skills/uikit-realtime-list/` |
 
 **測試數**：`OddsCore` 75 + `OddsPresentation` 36 + `OddsBoardTests` 27 = **138**
 （另 `OddsUITests` 1 支模組佔位，`grep func test` 總數為 139）
@@ -75,7 +75,10 @@ Instruments 截圖進 repo（`docs/instruments-*.png`，共 1.5MB），
       數據已寫進 `ARCHITECTURE.md` §5 與 `docs/verification.md` §3
 - [x] **操作錄影**（人工）— 八幕已完成
 - [ ] 建議交件前由使用者跑一次 `/code-review ultra`（多 agent 深度審查，僅使用者可觸發）
-- [ ] **Phase 6** — 萃取可重用的 SKILL.md
+- [x] **Phase 6** — 萃取 `skills/uikit-realtime-list/`：
+      SKILL.md（三層策略、非同步邊界、資料正確性、常見錯誤表）
+      + references/pitfalls.md（五個讀程式碼找不到的陷阱）
+      + references/verification.md（驗證分層、恆真測試識別、平台限制備忘）
 
 ### D5 文件的三個判斷（寫的時候刻意的取捨）
 
