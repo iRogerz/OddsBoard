@@ -12,9 +12,14 @@
 **D5 全數完成。** 文件（`ARCHITECTURE.md`、README 交件版、`docs/verification.md`）、
 Instruments 五項實測（全過）、功能回歸九項（全過）、操作錄影八幕（已完成）。
 
-**目前狀態：程式碼與文件都還沒 commit。** 交件前尚待：
-1. commit + push 到 public repo
-2. 決定錄影檔的交付方式（不建議進 git）
+**交付物齊備。** 影片放 YouTube（`watch?v=Hy7F4Z-h2Yo`，README 已連結），
+Instruments 截圖進 repo（`docs/instruments-*.png`，共 1.5MB），
+`.trace` 檔不進版控（`.gitignore` 已排除 —— 跨機器/跨 Xcode 版本常打不開，
+且面試官要的是結論而非原始檔）。
+
+交件前尚待：
+1. **push 到 public repo**（commit 已完成，尚未推送）
+2. **確認 YouTube 影片可見性不是「私人」** —— 用無痕視窗實測一次
 3. 建議由使用者跑一次 `/code-review ultra`
 4. Phase 6（Skill 萃取）—— 與交件無關，可之後做
 

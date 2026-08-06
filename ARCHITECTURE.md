@@ -137,6 +137,27 @@ UIKit 沒有自動重繪，每個要上畫面的狀態都得明確接一條線�
 兩次 hitch 的 min/avg/max 完全相同（皆 16.67ms，即一個 vsync），且集中在同一時刻
 —— 是切換推播頻率那一瞬間錯過一次 vsync，不是持續性掉幀。
 
+<details>
+<summary>Instruments 截圖（點開）</summary>
+
+**Time Profiler + Animation Hitches**
+
+主執行緒的 heaviest stack 全是 UIKit 的正常運作（`__CFRunLoopRun` →
+`_UIUpdateCycleNotify` → `-[UITableView _updat…]`），`flushPendingUpdates`
+未進入前列。Hangs 無圖表、Thermal State 全程 Nominal。
+
+![Time Profiler 與 Animation Hitches](docs/instruments-time-profiler-hitches.png)
+
+**Allocations + Leaks**
+
+Persistent 曲線在前 10 秒爬升後走平；Leaks 三次檢查全綠。
+`VM: UILabel (CALayer)` 停在 131 persistent —— cell 重用正常，
+沒有隨滾動累積。
+
+![Allocations 與 Leaks](docs/instruments-allocations-leaks.png)
+
+</details>
+
 > 註：iOS 15 起 App 在 ProMotion 裝置上預設仍以 60fps 渲染。本專案刻意不加入
 > `CADisableMinimumFrameDurationOnPhone`：UI 更新已由 `CADisplayLink` 節流到
 > 100ms（10Hz），120Hz 渲染對賠率看板沒有意義，只會多耗電。

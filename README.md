@@ -36,6 +36,16 @@
 | [`CLAUDE.md`](CLAUDE.md) | 專案憲法：不可違反的規則、架構、非同步邊界 |
 | [`docs/sdd-progress.md`](docs/sdd-progress.md) | 開發進度與逐條決策紀錄（開發過程用，非交件內容） |
 
+## 操作影片
+
+**▶ [OddsBoard 操作示範](https://www.youtube.com/watch?v=Hy7F4Z-h2Yo)**
+
+依序展示：列表排序與 100 場資料 → 賠率跳動時只有變動的那一格閃爍 →
+加壓至 1000 筆/秒後滾動仍順暢（HUD 顯示 `reloadData 0`）→ 模擬斷線後的
+指數退避重連與全量對帳 → 載入失敗與恢復 → 詳情頁往返 → 冷啟動的磁碟快取。
+
+效能實測數據與 Instruments 截圖見 [`ARCHITECTURE.md` §5](ARCHITECTURE.md)。
+
 ## 執行
 
 ```bash
