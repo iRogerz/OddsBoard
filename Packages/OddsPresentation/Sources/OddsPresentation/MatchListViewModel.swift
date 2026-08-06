@@ -141,8 +141,31 @@ public final class MatchListViewModel: ObservableObject {
             startStreamingIfNeeded()
             await socket.connect()
         } catch {
+            // **載入失敗必須一併中斷推播。**
+            //
+            // 不變式：`loadState == .failed` ⟺ 畫面上沒有任何即時資料在流動。
+            //
+            // 少了這一行，重新載入失敗時會出現「狀態列寫著載入失敗、賠率卻仍在
+            // 跳動」的畫面 —— 使用者無從判斷哪個才是真的。首次冷啟動失敗時之所以
+            // 不會有這個問題，只是因為 `socket.connect()` 排在 `try` 之後、根本
+            // 還沒被呼叫；一旦有重新載入的入口，這個巧合就不成立了。
+            //
+            // 註：REST 與 WebSocket 在真實系統中確實是獨立的失敗域，「推播還活著
+            // 但 REST 掛了」是可能的。那種情況該用獨立的旗標表達（如同 D4 的
+            // `resyncFailed`），而不是讓 `.failed` 一詞同時代表兩種互相矛盾的畫面。
+            await socket.disconnect()
             loadState = .failed(String(describing: error))
         }
+    }
+
+    /// 強制重新載入，不受目前狀態阻擋。
+    ///
+    /// 與 `start()` 的差別只在那道守衛：`start()` 會擋掉已載入完成的情況，
+    /// 因此無法用來重跑載入流程。Debug 面板切換 API 失敗模式後需要這個入口，
+    /// 否則錯誤畫面在 App 裡永遠走不到（`docs/spec.md` §FR-1.4）。
+    public func reload() async {
+        loadState = .idle
+        await start()
     }
 
     /// 畫面離開時呼叫：中斷推播來源，但保留事件消費者。
